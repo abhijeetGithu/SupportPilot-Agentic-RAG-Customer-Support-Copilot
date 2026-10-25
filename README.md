@@ -43,16 +43,18 @@ The knowledge base is the public **[SearchUnify documentation](https://docs.sear
 |---|---|---|
 | **RAG** | Doc crawler, HTML cleaning, heading-aware chunking with contextual headers | ✅ Done |
 | | Dense retrieval (bge-small) + BM25 vectors in Qdrant | ✅ Done |
-| | Hybrid search (Reciprocal Rank Fusion) + cross-encoder reranking | 🔄 In progress |
-| **Evaluation** | 116-question golden set, Recall@K / MRR, failure analysis, chunk-size ablation | ✅ Done |
+| | Hybrid search (weighted RRF), duplicate collapsing, LLM query rewriting | ✅ Done |
+| | Cross-encoder reranking: evaluated, off by default (no recall gain, ~2 s on CPU) | ✅ Done |
+| **Evaluation** | Standard + hard (vocabulary-mismatch) test sets, Recall@K / MRR, ablations, failure analysis | ✅ Done |
 | | RAGAS faithfulness / relevancy, LLM-as-judge, agent scenario tests, CI quality gate | 📋 Planned |
-| **Agent** | LangGraph agent with tool calling, memory and step limits | 📋 Planned |
-| | Ticket creation with **human-in-the-loop confirmation** (LangGraph `interrupt`) | 📋 Planned |
-| | Escalation to a human with **live handoff** in the chat | 📋 Planned |
-| **ML** | DistilBERT ticket classifier vs TF-IDF baseline, tracked in MLflow, staff-feedback loop | 📋 Planned |
-| **App** | FastAPI backend with SSE streaming, JWT staff auth | 🏗️ Scaffolded |
+| **Agent** | LangGraph agent with tool calling, persistent memory (SQLite/Postgres) and step limits | ✅ Done |
+| | Ticket creation with **human-in-the-loop confirmation** (LangGraph `interrupt`) | ✅ Done |
+| | Escalation to a human (agent side done; live chat handoff UI in Phase 6) | 🔄 In progress |
+| **ML** | DistilBERT ticket classifier (Colab GPU) vs TF-IDF baseline, MLflow, bootstrap CIs, temperature-scaling calibration | ✅ Done |
+| | Staff-feedback loop (reclassifications → training data) | 📋 Planned |
+| **App** | FastAPI backend: 17 endpoints, SSE token streaming, ticket-draft resume, staff APIs, JWT, model warm-up | ✅ Done |
 | | Next.js customer chat widget, support pages and staff dashboard | 🏗️ Scaffolded |
-| | PostgreSQL ticket system (sessions, tickets, messages, audit events) | 🏗️ Scaffolded |
+| | Ticket system: TicketService with PII masking, duplicate merge, classification, audit log (PostgreSQL) | ✅ Done |
 | **Integrations** | MCP server exposing `search_docs`, `create_ticket`, `get_ticket_status` | 📋 Planned |
 | **LLMOps** | Prompt-injection and PII guardrails, Langfuse tracing (latency, tokens, cost) | 📋 Planned |
 | **Deploy** | Docker Compose, GitHub Actions CI, Vercel + Render deployment | 🏗️ Scaffolded |
@@ -87,7 +89,7 @@ flowchart LR
     end
 
     subgraph AI["AI services"]
-        RET["Hybrid retriever<br/>dense + BM25 → RRF → rerank"]
+        RET["Hybrid retriever<br/>query rewrite · dense + BM25 · RRF"]
         CLF["DistilBERT<br/>ticket classifier"]
         LLM["LLM · Groq<br/>gpt-oss-120b"]
     end
@@ -150,9 +152,10 @@ sequenceDiagram
     A->>L: decide next step with tools available
     L-->>A: call search_docs
     A->>R: search_docs query
-    R->>Q: dense + BM25 search, top 20
+    R->>R: LLM rewrites query into doc vocabulary
+    R->>Q: dense + BM25 for original and rewritten query
     Q-->>R: candidate chunks
-    R-->>A: top 5 after RRF fusion and reranking
+    R-->>A: top 5 after RRF fusion and duplicate collapsing
     A->>L: answer using only these passages, cite sources
     L-->>A: grounded answer with citations
     A->>G: output check for grounding and PII
@@ -235,7 +238,7 @@ stateDiagram-v2
     closed --> [*]
 ```
 
-Tickets with classifier confidence below 0.6 are flagged `needs_review`. When staff change a category
+Tickets with low calibrated confidence (category < 0.40 or priority < 0.50) are flagged `needs_review`. When staff change a category
 or priority, a `reclassified` event is logged and exported as new training data for the classifier.
 
 ---
@@ -260,7 +263,7 @@ flowchart TD
 
 | Tool | Purpose |
 |---|---|
-| `search_docs(query)` | Hybrid search + rerank, returns passages with source URLs |
+| `search_docs(query)` | Hybrid search with query rewriting, returns passages with source URLs |
 | `create_ticket(subject, description)` | Drafts a ticket and **pauses** until the customer confirms or edits it |
 | `get_ticket_status(number)` | Returns status and latest reply, only for the session's own tickets |
 | `escalate_to_human(reason)` | Escalates the ticket and switches the chat to human mode |
@@ -292,14 +295,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Q["User question"] --> E1["Embed query"]
-    E1 --> D["Dense search<br/>top 20"]
-    E1 --> S["BM25 search<br/>top 20"]
-    D & S --> F["Reciprocal Rank Fusion"]
+    Q["User question"] --> RW["LLM query rewrite<br/>into doc vocabulary"]
+    Q --> D1["Dense + BM25<br/>original query"]
+    RW --> D2["Dense + BM25<br/>rewritten query"]
+    D1 & D2 --> F["Weighted RRF fusion<br/>k = 2"]
     F --> X["Collapse duplicate<br/>boilerplate chunks"]
-    X --> R["Cross-encoder rerank<br/>ms-marco-MiniLM"]
-    R --> T["Top 5 passages<br/>with citations"]
+    X --> T["Top 5 passages<br/>with citations"]
 ```
+
+Every stage was kept or dropped based on measurements (see [Phase 2 results](docs/results/phase2_hybrid_retrieval.md)).
+A cross-encoder reranker was tested and **rejected**: no Recall@5 gain and about 2 s extra per query on CPU.
 
 ---
 
@@ -320,18 +325,27 @@ flowchart LR
 
 ### Results so far
 
-**Dense retrieval baseline** (116 questions, bge-small, 384-token chunks):
+Two 116-question test sets with shared labels:
+- **Standard**: LLM-written support questions.
+- **Hard**: the same questions rewritten the way real users type (keywords, vague symptoms, typos, everyday synonyms),
+  with the docs' own terms banned. Word overlap with the answer passage drops from 0.62 to 0.20.
 
-| Metric | Score |
-|---|---|
-| Recall@1 | 0.776 |
-| Recall@3 | 0.897 |
-| **Recall@5** | **0.922** |
-| Recall@10 | 0.931 |
-| MRR@10 | 0.836 |
-| Search latency p50 / p95 (CPU) | ~64 ms / ~105 ms |
+**Retrieval ablation (Recall@5)**
 
-**Chunk-size ablation**
+| Strategy | Standard | Hard (vocabulary mismatch) |
+|---|---|---|
+| Dense (bge-small), Phase 1 baseline | 0.922 | 0.543 |
+| BM25 only | 0.922 | 0.310 |
+| Hybrid (dense + BM25, RRF) + dedup | 0.966 | 0.509 |
+| Hybrid + dedup + cross-encoder rerank | 0.948 | 0.491 |
+| **Hybrid + dedup + LLM query rewrite (final)** | **0.966** | **0.638** |
+
+- **Hybrid search** fixes exact-term misses (error codes, API names): standard set from 0.922 to 0.966.
+- On vocabulary-mismatch queries BM25 only adds noise, until the **LLM rewrite** translates the question into doc
+  terms: hard set from 0.509 to 0.638 (+12.9 points).
+- **Rerankers** (MiniLM, Jina-tiny, Jina-turbo) never improved Recall@5 and cost about 2 s per query on CPU, so they're off.
+
+**Chunk-size ablation** (dense, standard set)
 
 | Chunk size | Chunks | Recall@5 | MRR@10 |
 |---|---|---|---|
@@ -339,16 +353,51 @@ flowchart LR
 | **384** | 1,563 | **0.922** | **0.836** |
 | 512 | 1,237 | 0.871 | 0.772 |
 
-**Failure analysis:** 4 of 13 misses were boilerplate text copied across 40–56 connector pages
-(the right answer, from a different page). These were fixed with near-duplicate label expansion.
-The rest were exact-term mismatches, which Phase 2 targets with hybrid search and reranking.
-Full write-up: [docs/results/phase1_retrieval_baseline.md](docs/results/phase1_retrieval_baseline.md).
+**Duplicate boilerplate:** 16% of chunks (249) are near-copies of the same text across connector pages
+(e.g. "After the First Crawl" appears on 56 pages). They are grouped at index time and collapsed at query time,
+so the top 5 holds five *different* passages.
+
+**Ticket classifier** (23,654 deduplicated tickets, 2,366-ticket test set, macro-F1):
+
+| Model | Category (10 teams) | Priority (3 levels) | CPU latency |
+|---|---|---|---|
+| TF-IDF + Logistic Regression | 0.628 | 0.675 | 0.17 ms |
+| DistilBERT, run 1 (4 epochs, unweighted) | 0.450 | 0.623 | — |
+| **DistilBERT, run 2 (early stopping, class-weighted)** | **0.652** | **0.716** | ~70 ms |
+
+- Run 1 **underfit** (validation F1 still rising at the last epoch). Run 2 fixed that and weighted rare classes,
+  which gained most (Returns +0.11, General Inquiry +0.07 F1).
+- Paired bootstrap: the priority gain is clear (+0.041, 95% CI [+0.019, +0.061]); the category gain is modest
+  (+0.024, CI [−0.002, +0.051]).
+- **Calibration:** the fine-tuned model was overconfident (priority: 95% mean confidence at 72% accuracy).
+  Temperature scaling cut the calibration error (ECE) from 0.23 to 0.04, so the human-review rule works:
+  17.8% of tickets are flagged, and those are about 2.7× more likely to be wrong than auto-routed ones.
+
+**Agent scenarios** (gpt-oss-120b on Groq, real retriever, classifier and database; 16 conversations, 46 checks):
+
+| Metric | Result |
+|---|---|
+| Scenarios passed | **15/16** (45/46 checks) |
+| Correct first tool (search / ticket / status / escalate / none) | **100%** |
+| Prompt injection (other customer's email, prompt extraction) | blocked: no leak, no foreign ticket |
+| Another customer's ticket status | nothing revealed |
+| LLM calls per turn · tokens in/out | 1.65 · ~2.4K / ~120 |
+
+The remaining failure is an ungrounded answer on a vague follow-up ("can I change its name afterwards?"): retrieval
+missed and the model still answered without a citation. The output grounding check in Phase 8 targets this.
+
+**Live API latency** (laptop, Groq free tier): first streamed token **2.1 s**, full answer **2.6 s**,
+ticket created after approval **0.2 s** (DistilBERT loaded at startup instead of on the first request).
+
+Full write-ups: [Phase 1 baseline](docs/results/phase1_retrieval_baseline.md) ·
+[Phase 2 hybrid retrieval](docs/results/phase2_hybrid_retrieval.md) ·
+[Phase 3 ticket classifier](docs/results/phase3_ticket_classifier.md) ·
+[Phase 4 agent](docs/results/phase4_agent.md) ·
+[Phase 5 API](docs/results/phase5_api.md).
 
 | Upcoming metric | Phase |
 |---|---|
-| Recall@5 with hybrid + rerank, plus a harder real-user query set | 2 |
-| Ticket classifier macro-F1 (DistilBERT vs TF-IDF baseline) | 3 |
-| RAGAS faithfulness and answer relevancy, agent tool-choice accuracy | 8 |
+| RAGAS faithfulness and answer relevancy, output grounding check | 8 |
 | p95 end-to-end latency and cost per query | 9 |
 
 ---
@@ -359,8 +408,8 @@ Full write-up: [docs/results/phase1_retrieval_baseline.md](docs/results/phase1_r
 |---|---|
 | **LLM** | Groq (`openai/gpt-oss-120b`), switchable to Gemini or Ollama via one env var |
 | **Agent** | LangGraph (state graph, tools, checkpointer, `interrupt` for human in the loop) |
-| **RAG** | LlamaIndex (parsing, chunking), Qdrant (dense + sparse vectors), fastembed (bge-small, BM25), cross-encoder reranker |
-| **ML** | DistilBERT (Hugging Face Transformers), scikit-learn baseline, MLflow |
+| **RAG** | LlamaIndex (parsing, chunking), Qdrant (dense + sparse vectors), fastembed (bge-small, BM25), LLM query rewriting; cross-encoder rerankers evaluated |
+| **ML** | DistilBERT fine-tuned on a Colab T4 (Hugging Face Transformers), scikit-learn baseline, MLflow, temperature scaling |
 | **Evaluation** | Custom Recall@K / MRR harness, RAGAS, LLM-as-judge |
 | **Backend** | FastAPI, Server-Sent Events, SQLAlchemy, PostgreSQL, JWT |
 | **Frontend** | Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query |
@@ -433,10 +482,10 @@ Run the tests with `pytest`. To run everything in containers, use `docker compos
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Data crawling, cleaning, chunking, dense retrieval baseline, golden set, retrieval eval
-- [ ] **Phase 2:** Hybrid search (BM25 + dense, RRF), cross-encoder reranking, harder query set
-- [ ] **Phase 3:** Ticket classifier: TF-IDF baseline vs fine-tuned DistilBERT, MLflow tracking
-- [ ] **Phase 4:** LangGraph agent, tools, ticket confirmation interrupt, TicketService, memory
-- [ ] **Phase 5:** FastAPI chat (SSE), tickets, admin and auth endpoints
+- [x] **Phase 2:** Hybrid search (weighted RRF), duplicate collapsing, LLM query rewriting, reranker evaluation, hard query set
+- [x] **Phase 3:** Ticket classifier: TF-IDF baseline vs fine-tuned DistilBERT, MLflow tracking, calibration
+- [x] **Phase 4:** LangGraph agent, tools, ticket confirmation interrupt, TicketService, memory, scenario evals
+- [x] **Phase 5:** FastAPI chat (SSE), tickets, admin and auth endpoints, live latency measurements
 - [ ] **Phase 6:** Next.js chat widget, support pages, staff dashboard
 - [ ] **Phase 7:** MCP server for Claude Desktop / Cursor
 - [ ] **Phase 8:** RAGAS and LLM-as-judge evals, agent scenario tests, guardrails
