@@ -17,7 +17,7 @@ from supportpilot.api.schemas import (
 )
 from supportpilot.classifier.predict import TicketPrediction, classify_ticket
 from supportpilot.db.models import AuthorType, Ticket, TicketStatus
-from supportpilot.tickets.schemas import TicketMessageOut, TicketOut, TicketUpdate
+from supportpilot.tickets.schemas import AttachmentOut, TicketMessageOut, TicketOut, TicketUpdate
 from supportpilot.tickets.service import TicketService
 from supportpilot.tickets.suggest import suggest_reply
 
@@ -37,6 +37,7 @@ def _detail(ticket: Ticket) -> TicketDetail:
         ticket=TicketOut.model_validate(ticket),
         messages=[TicketMessageOut.model_validate(m) for m in ticket.messages],
         events=[TicketEventOut.model_validate(e) for e in ticket.events],
+        attachments=[AttachmentOut.model_validate(a) for a in ticket.attachments],
     )
 
 

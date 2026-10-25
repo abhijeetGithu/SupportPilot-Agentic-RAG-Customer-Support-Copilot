@@ -60,8 +60,7 @@ never needs CORS.
 |---|---|
 | `/` | Product landing page with the floating **chat widget** |
 | `/support/new` | Contact-support form (creates a ticket without chatting) |
-| `/support/tickets` | Look up a ticket by number + email |
-| `/support/tickets/[number]` | Ticket status, staff replies, add a reply |
+| `/support/tickets?number=&email=` | Look up a ticket, see status and staff replies, add a reply |
 
 **Chat widget features:** pre-chat form (name + email), token streaming, a "Searching docs…"
 status while tools run, clickable source citations, an editable **ticket confirmation card**,
@@ -80,10 +79,10 @@ and a live **handoff mode** after escalation, in which staff replies appear in t
 ```
 frontend/
 ├── app/
-│   ├── page.tsx                        # landing + chat widget
-│   ├── support/new/page.tsx
-│   ├── support/tickets/page.tsx
-│   ├── support/tickets/[number]/page.tsx
+│   ├── (customer)/layout.tsx           # header + chat widget
+│   ├── (customer)/page.tsx             # landing
+│   ├── (customer)/support/new/page.tsx
+│   ├── (customer)/support/tickets/page.tsx
 │   ├── login/page.tsx
 │   └── dashboard/
 │       ├── layout.tsx                  # auth guard + sidebar

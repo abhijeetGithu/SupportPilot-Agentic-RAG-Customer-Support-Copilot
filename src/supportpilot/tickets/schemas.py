@@ -10,6 +10,7 @@ class TicketCreate(BaseModel):
     customer_email: EmailStr
     subject: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)  # from POST /api/uploads
 
 
 class TicketUpdate(BaseModel):
@@ -48,6 +49,18 @@ class TicketMessageOut(BaseModel):
     author_type: str
     body: str
     citations: list | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AttachmentOut(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    kind: str  # image | pdf | text
+    size_bytes: int
+    uploaded_by: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

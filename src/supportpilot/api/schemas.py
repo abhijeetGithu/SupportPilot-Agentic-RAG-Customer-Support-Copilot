@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-from supportpilot.tickets.schemas import TicketMessageOut, TicketOut
+from supportpilot.tickets.schemas import AttachmentOut, TicketMessageOut, TicketOut
 
 
 class SessionCreate(BaseModel):
@@ -18,6 +18,7 @@ class SessionOut(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)  # from POST /api/uploads
 
 
 class ResumeRequest(BaseModel):
@@ -39,6 +40,7 @@ class ChatMessage(BaseModel):
     role: Literal["customer", "ai", "staff"]
     content: str
     id: int | None = None  # ticket message id (staff replies), used for polling
+    attachments: list[dict] = []  # {id, filename, kind, size_bytes} for customer messages
 
 
 class ChatHistory(BaseModel):
@@ -87,12 +89,14 @@ class CustomerTicketView(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[TicketMessageOut]
+    attachments: list[AttachmentOut] = []
 
 
 class TicketDetail(BaseModel):
     ticket: TicketOut
     messages: list[TicketMessageOut]
     events: list[TicketEventOut]
+    attachments: list[AttachmentOut] = []
 
 
 class TicketPage(BaseModel):

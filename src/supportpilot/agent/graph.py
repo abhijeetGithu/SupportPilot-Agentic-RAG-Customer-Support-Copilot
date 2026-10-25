@@ -69,8 +69,24 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None, llm: BaseChatMo
     return g.compile(checkpointer=checkpointer)
 
 
-def new_turn(message: str) -> dict:
-    """Graph input for a new customer message: resets the per-turn counters."""
+def new_turn(message: str, attachments: list | None = None) -> dict:
+    """Graph input for a new customer message: resets the per-turn counters.
+
+    With attachments, the LLM sees a description of each file (and the text of logs) appended to the
+    message, while `display_text` / `attachments` keep the original words and file names for the UI.
+    """
     from langchain_core.messages import HumanMessage
 
-    return {"messages": [HumanMessage(message)], "steps": 0, "citations": []}
+    from supportpilot.attachments import describe_for_llm, meta
+
+    content = message
+    extra: dict = {}
+    if attachments:
+        content = f"{message}\n\n{describe_for_llm(attachments)}"
+        extra = {"display_text": message, "attachments": [meta(a) for a in attachments]}
+    return {"messages": [HumanMessage(content, additional_kwargs=extra)], "steps": 0, "citations": []}
+
+
+def display_text(message) -> str:
+    """What the customer actually typed (without the attachment block the LLM sees)."""
+    return str(message.additional_kwargs.get("display_text", message.content))

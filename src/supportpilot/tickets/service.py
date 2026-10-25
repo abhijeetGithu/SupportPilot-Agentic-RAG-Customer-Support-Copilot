@@ -15,9 +15,11 @@ import numpy as np
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from supportpilot.attachments import link, unlinked_session_attachments
 from supportpilot.classifier.predict import TicketPrediction, classify_ticket
 from supportpilot.config import get_settings
 from supportpilot.db.models import (
+    Attachment,
     AuthorType,
     ChatSession,
     SessionMode,
@@ -80,7 +82,9 @@ class TicketService:
         source: TicketSource,
         session_id: str | None = None,
         transcript: list[tuple[AuthorType, str]] | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> CreateResult:
+        """attachments: validated files to link. Unlinked uploads from the chat session are linked too."""
         s = get_settings()
         subject, description = mask_pii(data.subject.strip()), mask_pii(data.description.strip())
 
@@ -88,6 +92,7 @@ class TicketService:
         if dup:
             self._message(dup, AuthorType.CUSTOMER, f"[Duplicate report merged]\n{subject}\n\n{description}")
             self._event(dup, "duplicate_merged", "system", {"source": source.value, "subject": subject})
+            self.attach(dup, attachments, session_id)
             self.db.flush()
             return CreateResult(ticket=TicketOut.model_validate(dup), duplicate_of_existing=True)
 
@@ -117,6 +122,7 @@ class TicketService:
             self._message(ticket, author, mask_pii(body))
         self._event(ticket, "created", "customer" if source != TicketSource.MCP else "system", {"source": source.value})
         self._event(ticket, "classified", "ai", pred.model_dump() | {"needs_review": needs_review})
+        self.attach(ticket, attachments, session_id)
         self.db.flush()
         self.db.refresh(ticket)
         return CreateResult(ticket=TicketOut.model_validate(ticket))
@@ -255,6 +261,15 @@ class TicketService:
                 session.mode = SessionMode.HUMAN.value
         self.db.flush()
         return ticket
+
+    def attach(self, ticket: Ticket, attachments: list[Attachment] | None = None, session_id: str | None = None) -> None:
+        """Link files (explicit ones plus unlinked uploads from the chat session) to the ticket and log it."""
+        candidates = list(attachments or [])
+        if session_id:
+            candidates += [a for a in unlinked_session_attachments(self.db, session_id) if a not in candidates]
+        new = link(candidates, ticket.id)
+        if new:
+            self._event(ticket, "attachments_added", "customer", {"files": [a.filename for a in new]})
 
     # ---------- helpers ----------
     def _require(self, ticket_id: int) -> Ticket:

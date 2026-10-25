@@ -49,11 +49,11 @@ The knowledge base is the public **[SearchUnify documentation](https://docs.sear
 | | RAGAS faithfulness / relevancy, LLM-as-judge, agent scenario tests, CI quality gate | 📋 Planned |
 | **Agent** | LangGraph agent with tool calling, persistent memory (SQLite/Postgres) and step limits | ✅ Done |
 | | Ticket creation with **human-in-the-loop confirmation** (LangGraph `interrupt`) | ✅ Done |
-| | Escalation to a human (agent side done; live chat handoff UI in Phase 6) | 🔄 In progress |
+| | Escalation to a human with **live handoff** in the same chat (staff replies appear in the widget) | ✅ Done |
 | **ML** | DistilBERT ticket classifier (Colab GPU) vs TF-IDF baseline, MLflow, bootstrap CIs, temperature-scaling calibration | ✅ Done |
 | | Staff-feedback loop (reclassifications → training data) | 📋 Planned |
 | **App** | FastAPI backend: 17 endpoints, SSE token streaming, ticket-draft resume, staff APIs, JWT, model warm-up | ✅ Done |
-| | Next.js customer chat widget, support pages and staff dashboard | 🏗️ Scaffolded |
+| | Next.js chat widget (streaming, citations, ticket-draft card, handoff), support pages, staff dashboard | ✅ Done |
 | | Ticket system: TicketService with PII masking, duplicate merge, classification, audit log (PostgreSQL) | ✅ Done |
 | **Integrations** | MCP server exposing `search_docs`, `create_ticket`, `get_ticket_status` | 📋 Planned |
 | **LLMOps** | Prompt-injection and PII guardrails, Langfuse tracing (latency, tokens, cost) | 📋 Planned |
@@ -243,6 +243,18 @@ or priority, a `reclassified` event is logged and exported as new training data 
 
 ---
 
+## 📸 Screenshots
+
+| Customer chat: streamed answer with cited sources | Live handoff: staff reply in the customer's chat |
+|---|---|
+| ![Chat answer](docs/images/chat-answer.png) | ![Handoff](docs/images/chat-handoff.png) |
+
+| Staff: ticket with classifier confidence, AI-suggested reply and audit log | Staff: inbox (urgent first, review flags) |
+|---|---|
+| ![Ticket detail](docs/images/staff-ticket.png) | ![Inbox](docs/images/staff-inbox.png) |
+
+---
+
 ## 🧠 Agent design (LangGraph)
 
 ```mermaid
@@ -393,7 +405,8 @@ Full write-ups: [Phase 1 baseline](docs/results/phase1_retrieval_baseline.md) ·
 [Phase 2 hybrid retrieval](docs/results/phase2_hybrid_retrieval.md) ·
 [Phase 3 ticket classifier](docs/results/phase3_ticket_classifier.md) ·
 [Phase 4 agent](docs/results/phase4_agent.md) ·
-[Phase 5 API](docs/results/phase5_api.md).
+[Phase 5 API](docs/results/phase5_api.md) ·
+[Phase 6 frontend](docs/results/phase6_frontend.md).
 
 | Upcoming metric | Phase |
 |---|---|
@@ -486,7 +499,7 @@ Run the tests with `pytest`. To run everything in containers, use `docker compos
 - [x] **Phase 3:** Ticket classifier: TF-IDF baseline vs fine-tuned DistilBERT, MLflow tracking, calibration
 - [x] **Phase 4:** LangGraph agent, tools, ticket confirmation interrupt, TicketService, memory, scenario evals
 - [x] **Phase 5:** FastAPI chat (SSE), tickets, admin and auth endpoints, live latency measurements
-- [ ] **Phase 6:** Next.js chat widget, support pages, staff dashboard
+- [x] **Phase 6:** Next.js chat widget, support pages, staff dashboard, Playwright end-to-end walk-through
 - [ ] **Phase 7:** MCP server for Claude Desktop / Cursor
 - [ ] **Phase 8:** RAGAS and LLM-as-judge evals, agent scenario tests, guardrails
 - [ ] **Phase 9:** Langfuse observability, CI eval gate, cloud deployment and live demo

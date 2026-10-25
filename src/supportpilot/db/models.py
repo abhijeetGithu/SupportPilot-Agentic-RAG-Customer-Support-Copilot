@@ -81,6 +81,9 @@ class Ticket(Base):
     events: Mapped[list["TicketEvent"]] = relationship(
         back_populates="ticket", order_by="TicketEvent.id"
     )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        back_populates="ticket", order_by="Attachment.created_at"
+    )
 
     @property
     def number(self) -> str:
@@ -114,3 +117,22 @@ class TicketEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     ticket: Mapped[Ticket] = relationship(back_populates="events")
+
+
+class Attachment(Base):
+    """An uploaded file. Starts unlinked (uploaded in the chat or form) and is linked to a ticket
+    when the ticket is created, or immediately if the chat session already has one."""
+
+    __tablename__ = "attachments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    ticket_id: Mapped[int | None] = mapped_column(ForeignKey("tickets.id"), index=True)
+    session_id: Mapped[str | None] = mapped_column(ForeignKey("chat_sessions.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(160))  # sanitized original name, for display only
+    content_type: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(10))  # image | pdf | text
+    size_bytes: Mapped[int]
+    uploaded_by: Mapped[str] = mapped_column(String(10), default="customer")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    ticket: Mapped[Ticket | None] = relationship(back_populates="attachments")

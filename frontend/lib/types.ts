@@ -49,10 +49,28 @@ export interface TicketEvent {
   created_at: string;
 }
 
+export interface Attachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  kind: "image" | "pdf" | "text";
+  size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface AttachmentMeta {
+  id: string;
+  filename: string;
+  kind: string;
+  size_bytes: number;
+}
+
 export interface TicketDetail {
   ticket: Ticket;
   messages: TicketMessage[];
   events: TicketEvent[];
+  attachments: Attachment[];
 }
 
 export interface TicketPage {
@@ -69,6 +87,7 @@ export interface CustomerTicketView {
   created_at: string;
   updated_at: string;
   messages: TicketMessage[];
+  attachments: Attachment[];
 }
 
 export interface TicketDraft {
@@ -80,6 +99,7 @@ export interface ChatMessage {
   role: "customer" | "ai" | "staff";
   content: string;
   id: number | null; // ticket message id for staff replies (used for polling)
+  attachments?: AttachmentMeta[];
 }
 
 export interface ChatHistory {

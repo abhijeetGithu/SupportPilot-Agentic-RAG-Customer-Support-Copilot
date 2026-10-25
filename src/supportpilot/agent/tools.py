@@ -25,10 +25,15 @@ def ticket_service(db) -> TicketService:
     return TicketService(db)
 
 
+def _typed(m: HumanMessage) -> str:
+    """The customer's own words (the LLM additionally sees an attachment block)."""
+    return str(m.additional_kwargs.get("display_text", m.content))
+
+
 def _last_user_text(state: dict) -> str | None:
     for m in reversed(state.get("messages", [])):
         if isinstance(m, HumanMessage):
-            return str(m.content)
+            return _typed(m)
     return None
 
 
@@ -36,7 +41,9 @@ def _transcript(state: dict) -> list[tuple[AuthorType, str]]:
     out = []
     for m in state.get("messages", []):
         if isinstance(m, HumanMessage):
-            out.append((AuthorType.CUSTOMER, str(m.content)))
+            files = m.additional_kwargs.get("attachments") or []
+            suffix = ("\n[Attached: " + ", ".join(f["filename"] for f in files) + "]") if files else ""
+            out.append((AuthorType.CUSTOMER, _typed(m) + suffix))
         elif isinstance(m, AIMessage) and m.content and not m.tool_calls:
             out.append((AuthorType.AI, str(m.content)))
     return out
@@ -80,7 +87,8 @@ def create_ticket(
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:
     """Create a support ticket for the current customer. The customer reviews the draft before it is
-    submitted. Use a short subject and a description with what they tried and any error messages."""
+    submitted. Use a short subject, and write the description in the customer's own voice (first person:
+    "I tried...") with what they tried and any error messages, since they read and approve it."""
     # Pauses the graph; the API shows an editable draft and resumes with the customer's decision.
     # On resume this tool re-runs from the top and interrupt() returns that decision.
     decision = interrupt({"type": "ticket_draft", "draft": {"subject": subject, "description": description}})

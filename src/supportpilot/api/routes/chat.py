@@ -8,7 +8,7 @@ from langgraph.types import Command
 from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
-from supportpilot.agent.graph import new_turn
+from supportpilot.agent.graph import display_text, new_turn
 from supportpilot.api import deps
 from supportpilot.api.schemas import (
     ChatHistory,
@@ -20,6 +20,7 @@ from supportpilot.api.schemas import (
     StaffMessages,
 )
 from supportpilot.api.streaming import stream_events, to_sse
+from supportpilot.attachments import UploadRejected, get_customer_attachments
 from supportpilot.db.models import AuthorType, ChatSession, SessionMode, TicketStatus
 from supportpilot.tickets.service import create_chat_session
 
@@ -48,18 +49,31 @@ def create_session(body: SessionCreate, db: deps.DB):
 
 @router.post("/chat/{session_id}/stream")
 def stream_chat(body: ChatRequest, session: Session, graph: Graph, tickets: deps.Tickets):
-    """AI mode: run the agent and stream events. Human mode: store the message for the support team."""
+    """AI mode: run the agent and stream events. Human mode: store the message for the support team.
+
+    Attachments must have been uploaded with this session's id. If the session already has a ticket
+    they are linked to it right away; otherwise when the agent creates one.
+    """
+    try:
+        files = get_customer_attachments(tickets.db, body.attachment_ids, session.id)
+    except UploadRejected as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
+    ticket = tickets.session_ticket(session.id)
+    if ticket and files:
+        tickets.attach(ticket, files)
+
     if session.mode == SessionMode.HUMAN.value:
-        ticket = tickets.session_ticket(session.id)
         if ticket is None:
             raise HTTPException(status.HTTP_409_CONFLICT, "Session is in human mode but has no ticket")
-        msg = tickets.add_message(ticket.id, AuthorType.CUSTOMER, body.message)
+        names = ", ".join(a.filename for a in files)
+        msg = tickets.add_message(ticket.id, AuthorType.CUSTOMER, body.message + (f"\n[Attached: {names}]" if files else ""))
         tickets.db.commit()  # the stream may outlive this request's session
         return _sse(iter([{"type": "stored", "message_id": msg.id}, {"type": "done", "ticket_number": ticket.number}]))
 
     if graph.get_state(_cfg(session.id)).interrupts:
         raise HTTPException(status.HTTP_409_CONFLICT, "A ticket draft is waiting for approve, edit or cancel")
-    graph_input = {**new_turn(body.message), "customer": _customer(session)}
+    graph_input = {**new_turn(body.message, files), "customer": _customer(session)}
+    tickets.db.commit()  # links must be visible to the agent's own DB sessions
     return _sse(stream_events(graph, graph_input, _cfg(session.id)))
 
 
@@ -79,7 +93,8 @@ def history(session: Session, graph: Graph, tickets: deps.Tickets):
     messages = []
     for m in state.values.get("messages", []):
         if isinstance(m, HumanMessage):
-            messages.append(ChatMessage(role="customer", content=str(m.content)))
+            messages.append(ChatMessage(role="customer", content=display_text(m),
+                                        attachments=m.additional_kwargs.get("attachments") or []))
         elif isinstance(m, AIMessage) and m.content and not m.tool_calls:
             messages.append(ChatMessage(role="ai", content=str(m.content)))
     ticket = tickets.session_ticket(session.id)

@@ -11,8 +11,6 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from supportpilot.config import get_settings
 
-SQLITE_CHECKPOINTS = Path("data/processed/checkpoints.db")
-
 
 def make_checkpointer(database_url: str | None = None) -> BaseCheckpointSaver:
     url = database_url or get_settings().database_url
@@ -29,5 +27,6 @@ def make_checkpointer(database_url: str | None = None) -> BaseCheckpointSaver:
 
     from langgraph.checkpoint.sqlite import SqliteSaver
 
-    SQLITE_CHECKPOINTS.parent.mkdir(parents=True, exist_ok=True)
-    return SqliteSaver(sqlite3.connect(SQLITE_CHECKPOINTS, check_same_thread=False))
+    path = Path(get_settings().sqlite_checkpoints_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return SqliteSaver(sqlite3.connect(path, check_same_thread=False))

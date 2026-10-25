@@ -4,6 +4,7 @@ __pycache__/
 .env
 data/raw/**
 data/processed/**
+data/uploads/
 !data/**/.gitkeep
 models/
 mlruns/

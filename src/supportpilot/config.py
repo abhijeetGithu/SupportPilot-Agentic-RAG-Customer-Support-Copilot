@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     # Database: Postgres in Docker/cloud, SQLite for quick local runs and tests
     database_url: str = "sqlite:///data/processed/supportpilot.db"
+    sqlite_checkpoints_path: str = "data/processed/checkpoints.db"  # agent memory when not on Postgres
 
     # Agent (checkpointer reuses database_url: Postgres saver or SQLite saver)
     max_agent_steps: int = 8
@@ -46,6 +47,11 @@ class Settings(BaseSettings):
     # calibrated confidence below these -> needs_review (chosen in Phase 3: ~18% of tickets flagged)
     review_confidence_threshold: float = 0.40  # category
     review_priority_threshold: float = 0.50
+
+    # Attachments (screenshots, logs) on chat messages and tickets
+    uploads_dir: str = "data/uploads"
+    max_upload_mb: int = 10
+    max_attachments: int = 5  # per message / ticket
 
     # Classifier
     classifier_model_dir: str = "models/distilbert"  # from the Colab notebook; TF-IDF fallback

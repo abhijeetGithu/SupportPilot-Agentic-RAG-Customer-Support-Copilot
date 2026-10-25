@@ -4,8 +4,15 @@ from fastapi import APIRouter, HTTPException, status
 
 from supportpilot.api import deps
 from supportpilot.api.schemas import CustomerReply, CustomerTicketView, TicketLookup
+from supportpilot.attachments import UploadRejected, get_customer_attachments
 from supportpilot.db.models import AuthorType, Ticket, TicketSource, TicketStatus
-from supportpilot.tickets.schemas import CreateResult, TicketCreate, TicketMessageOut, TicketUpdate
+from supportpilot.tickets.schemas import (
+    AttachmentOut,
+    CreateResult,
+    TicketCreate,
+    TicketMessageOut,
+    TicketUpdate,
+)
 from supportpilot.tickets.service import TicketService
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -19,6 +26,7 @@ def _customer_view(ticket: Ticket) -> CustomerTicketView:
     return CustomerTicketView(
         number=ticket.number, subject=ticket.subject, status=ticket.status, created_at=ticket.created_at,
         updated_at=ticket.updated_at, messages=[TicketMessageOut.model_validate(m) for m in visible],
+        attachments=[AttachmentOut.model_validate(a) for a in ticket.attachments],
     )
 
 
@@ -31,8 +39,12 @@ def _owned(tickets: TicketService, number: str, email: str) -> Ticket:
 
 @router.post("", response_model=CreateResult, status_code=status.HTTP_201_CREATED)
 def create_ticket(body: TicketCreate, tickets: deps.Tickets):
-    """Contact form -> TicketService.create(source=form)."""
-    return tickets.create(body, TicketSource.FORM)
+    """Contact form -> TicketService.create(source=form). Attachments were uploaded without a session."""
+    try:
+        files = get_customer_attachments(tickets.db, body.attachment_ids, session_id=None)
+    except UploadRejected as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
+    return tickets.create(body, TicketSource.FORM, attachments=files)
 
 
 @router.post("/lookup", response_model=CustomerTicketView)
