@@ -4,6 +4,7 @@ Customer identity comes from graph state (InjectedState), so the LLM can't choos
 to create or read. Tools that change state return a Command with a ToolMessage plus state updates.
 """
 
+import logging
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -18,6 +19,7 @@ from supportpilot.tickets.schemas import TicketCreate
 from supportpilot.tickets.service import TicketService
 
 PASSAGE_CHARS = 1200
+log = logging.getLogger(__name__)
 
 
 def ticket_service(db) -> TicketService:
@@ -74,9 +76,34 @@ def search_docs(
         n = len(citations) + 1
         citations.append({"n": n, "title": h.title or h.doc_id, "url": h.url, "heading": h.heading})
         where = f"{h.title} > {h.heading}" if h.heading and h.heading != h.title else h.title
+        if h.doc_type == "kb":
+            where = f"Support KB article: {where}"
         blocks.append(f"[{n}] {where}\n{h.text[:PASSAGE_CHARS]}")
     text = "\n\n".join(blocks) if blocks else "No relevant documentation found."
-    return _reply(tool_call_id, text, citations=citations)
+    # A matching outage: the exact staff notice goes to the chat UI as its own card (the artifact), so its
+    # times and promises can't be paraphrased; the LLM only gets told it exists.
+    issue = known_issue(user_text or query)
+    if issue:
+        text = f"KNOWN ISSUE ({issue['number']}, being worked on): {issue['notice']}\n\n{text}"
+    return _reply(tool_call_id, text, artifact={"known_issue": issue} if issue else None, citations=citations)
+
+
+def known_issue(text: str) -> dict | None:
+    """{"number", "notice"} if the customer describes a problem matching an active incident."""
+    from supportpilot.incidents import detector
+    from supportpilot.incidents.service import customer_notice
+
+    if not detector.looks_like_problem(text):
+        return None
+    try:
+        with session_scope() as db:
+            incident = detector.match_active(db, text)
+            if incident is None:
+                return None
+            return {"number": incident.number, "notice": customer_notice(incident)}
+    except Exception:  # never let incident lookup break doc search
+        log.warning("known-issue lookup failed", exc_info=True)
+        return None
 
 
 @tool

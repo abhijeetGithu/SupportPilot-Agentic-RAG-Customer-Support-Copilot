@@ -52,6 +52,28 @@ class Settings(BaseSettings):
     uploads_dir: str = "data/uploads"
     max_upload_mb: int = 10
     max_attachments: int = 5  # per message / ticket
+    # Screenshots and PDFs are read by a vision model at upload time (Phase 7.5)
+    analyze_attachments: bool = True
+    vision_model: str = "qwen/qwen3.8-27b"  # Groq, image input; ~1.3K tokens and ~1 s per screenshot
+    vision_max_side: int = 1600  # px; larger images are downscaled before sending
+    pdf_max_pages: int = 5  # text layer read from the first pages; scanned PDFs: first 2 pages as images
+
+    # Knowledge loop (Phase 7.5): resolved tickets -> KB drafts -> staff review -> indexed with the docs
+    public_app_url: str = "http://localhost:3000"  # KB citations link to {public_app_url}/support/kb/KB-00001
+    auto_draft_kb: bool = True  # draft an article in the background when a ticket is resolved
+    # best-chunk cosine below this = likely not covered. Calibrated: flags 1% of standard and 10% of paraphrased
+    # answerable golden questions, catches 16/20 off-topic ones (docs/results/phase7_5b_knowledge_loop.md)
+    gap_coverage_threshold: float = 0.66
+
+    # Incident detection (Phase 7.5c): a burst of similar tickets from different customers
+    detect_incidents: bool = True
+    # pairs: 0.74 links 81% of same-outage pairs, 3% of near-misses; replaying traffic, 0.74-0.78 all work and
+    # 0.76 is mid-range (19/20 outages, 0 false, 0.95 member precision). See docs/results/phase7_5c_incidents.md
+    incident_similarity: float = 0.76
+    incident_window_minutes: int = 120
+    incident_min_reports: int = 3  # from distinct customers
+    incident_baseline_days: int = 7  # normal rate of similar tickets, for the burst test
+    incident_max_p_value: float = 0.01  # Poisson: this many similar tickets this fast would be very unusual
 
     # Classifier
     classifier_model_dir: str = "models/distilbert"  # from the Colab notebook; TF-IDF fallback

@@ -7,6 +7,7 @@ The classifier and the duplicate-similarity function are injectable, so tests ru
 loading DistilBERT or the embedding model.
 """
 
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -22,6 +23,8 @@ from supportpilot.db.models import (
     Attachment,
     AuthorType,
     ChatSession,
+    Incident,
+    IncidentStatus,
     SessionMode,
     Ticket,
     TicketEvent,
@@ -29,6 +32,7 @@ from supportpilot.db.models import (
     TicketSource,
     TicketStatus,
 )
+from supportpilot.knowledge.related import linked_numbers
 from supportpilot.tickets.schemas import CreateResult, TicketCreate, TicketOut, TicketUpdate
 
 OPEN_STATUSES = (TicketStatus.OPEN.value, TicketStatus.IN_PROGRESS.value, TicketStatus.ESCALATED.value)
@@ -40,6 +44,9 @@ PII_PATTERNS = [
     (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[ssn]"),
     (re.compile(r"(?i)\b(password|passwd|pwd)\s*[:=]\s*\S+"), r"\1: [redacted]"),
 ]
+
+
+log = logging.getLogger(__name__)
 
 
 def mask_pii(text: str) -> str:
@@ -96,7 +103,9 @@ class TicketService:
             self.db.flush()
             return CreateResult(ticket=TicketOut.model_validate(dup), duplicate_of_existing=True)
 
-        pred = self.classify(f"{subject}\n\n{description}")
+        # what screenshots / PDFs show (e.g. the exact error) also informs routing; the description is unchanged
+        notes = [a.summary_line() for a in self._candidates(attachments, session_id) if a.analysis]
+        pred = self.classify("\n\n".join([subject, description, *notes]))
         needs_review = pred.confidence < s.review_confidence_threshold or (
             not pred.urgent_rule and pred.priority_confidence < s.review_priority_threshold
         )
@@ -125,7 +134,30 @@ class TicketService:
         self.attach(ticket, attachments, session_id)
         self.db.flush()
         self.db.refresh(ticket)
+        if s.detect_incidents:
+            self.detect_incident(ticket)
         return CreateResult(ticket=TicketOut.model_validate(ticket))
+
+    def detect_incident(self, ticket: Ticket) -> None:
+        """Link the ticket to an incident (a burst of similar reports). Never blocks ticket creation."""
+        from supportpilot.incidents import detector
+        from supportpilot.incidents import service as incidents
+
+        try:
+            active_before = set(self.db.scalars(
+                select(Incident.id).where(Incident.status == IncidentStatus.ACTIVE.value)).all())
+            incident = detector.on_ticket_created(self.db, ticket)
+            if incident is None:
+                return
+            if incident.id in active_before:
+                self._event(ticket, "incident_linked", "system", {"incident": incident.number})
+                incidents.auto_reply(self.db, incident, ticket)
+            else:
+                for t in incident.tickets:
+                    self._event(t, "incident_opened", "system", {"incident": incident.number})
+            self.db.flush()
+        except Exception:
+            log.warning("incident detection failed for ticket %s", ticket.id, exc_info=True)
 
     def find_duplicate(self, email: str, subject: str, description: str) -> Ticket | None:
         """Open ticket from the same customer within the window whose text is semantically near-identical."""
@@ -247,6 +279,8 @@ class TicketService:
         ticket = self._require(ticket_id)
         msg = self._message(ticket, author, mask_pii(body), citations)
         self._event(ticket, "reply", author.value, {"message_chars": len(body)})
+        if author == AuthorType.STAFF and (articles := linked_numbers(body)):
+            self._event(ticket, "kb_linked", author.value, {"articles": articles})  # article usage stats
         self.db.flush()
         return msg
 
@@ -264,14 +298,17 @@ class TicketService:
 
     def attach(self, ticket: Ticket, attachments: list[Attachment] | None = None, session_id: str | None = None) -> None:
         """Link files (explicit ones plus unlinked uploads from the chat session) to the ticket and log it."""
-        candidates = list(attachments or [])
-        if session_id:
-            candidates += [a for a in unlinked_session_attachments(self.db, session_id) if a not in candidates]
-        new = link(candidates, ticket.id)
+        new = link(self._candidates(attachments, session_id), ticket.id)
         if new:
             self._event(ticket, "attachments_added", "customer", {"files": [a.filename for a in new]})
 
     # ---------- helpers ----------
+    def _candidates(self, attachments: list[Attachment] | None, session_id: str | None) -> list[Attachment]:
+        candidates = list(attachments or [])
+        if session_id:
+            candidates += [a for a in unlinked_session_attachments(self.db, session_id) if a not in candidates]
+        return candidates
+
     def _require(self, ticket_id: int) -> Ticket:
         ticket = self.db.get(Ticket, ticket_id)
         if ticket is None:

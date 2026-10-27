@@ -323,7 +323,7 @@ flowchart LR
 | Eval | **RAGAS** + Recall@K/MRR + LLM-as-judge + agent scenarios | Measured quality, CI gate |
 | Guardrails | Rules + LLM check, PII masking | Prompt-injection and PII defence |
 | Observability | **Langfuse** | Traces, latency, cost per query |
-| MCP | Official `mcp` SDK (FastMCP) | Exposes tools to any MCP client |
+| MCP | Official `mcp` SDK 2.x (`MCPServer`), stdio + streamable HTTP | Exposes tools to any MCP client |
 | Packaging / deploy | **Docker Compose**; Vercel (web) + Render (API) + Neon + Qdrant Cloud | All free tiers |
 | CI/CD | **GitHub Actions** | Lint, tests, frontend build, eval gate |
 
@@ -368,6 +368,6 @@ AI_engineer_project/
 | 4 | Database schema + TicketService + LangGraph agent, tools, confirm interrupt, memory | — |
 | 5 | FastAPI: SSE chat, ticket, admin and auth routes | — |
 | 6 | **Next.js frontend**: chat widget, support pages, staff dashboard | Live demo |
-| 7 | MCP server | — |
+| 7 | MCP server (stdio + HTTP, structured output, tool annotations) | Live calls from an MCP client |
 | 8 | RAGAS / LLM-as-judge / agent evals + guardrails | Faithfulness, tool accuracy |
 | 9 | Langfuse + Docker Compose + CI/CD + cloud deploy | p95 latency, $/query, live URL |

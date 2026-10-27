@@ -41,4 +41,6 @@ def suggest_reply(ticket: Ticket, llm=None, searcher=search) -> dict:
     )
     body = normalize_citations(str(out.content)).strip()
     cited = [c for c in citations if f"[{c['n']}]" in body]
+    if cited:  # the customer sees the reply, not the staff-only source chips: give the [n] markers links
+        body += "\n\n**Sources**\n" + "\n".join(f"{c['n']}. [{c['title']}]({c['url']})" for c in cited)
     return {"body": body, "citations": cited}

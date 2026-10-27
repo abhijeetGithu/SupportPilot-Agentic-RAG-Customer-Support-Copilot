@@ -1,0 +1,70 @@
+{
+  "_note": "Held-out set: written after the threshold and the problem-report gate were chosen, evaluated once. Synthetic, hand-written.",
+  "incidents": [
+    {
+      "id": "crawls_queued",
+      "reports": [
+        "None of our content sources have crawled today, they all sit in Queued",
+        "Every crawl we start stays stuck in the queue and never runs",
+        "Scheduled crawls did not run last night, status still queued this morning",
+        "Our Confluence and Zendesk sources are both stuck in queued state",
+        "Crawls are not starting at all since this morning, is the crawler down?",
+        "Indexing seems to be stopped, all sources show queued for hours",
+        "Manual crawl does nothing, the job just stays queued"
+      ]
+    },
+    {
+      "id": "autocomplete_broken",
+      "reports": [
+        "Autocomplete suggestions stopped appearing in our search box",
+        "Search suggestions are not showing when users type, since an hour ago",
+        "Type-ahead in the search client is broken, no suggestions at all",
+        "The search box autocomplete returns an error in the console",
+        "Query suggestions disappeared from our help center search",
+        "Autosuggest is not working anymore on the support portal",
+        "When typing in search, the suggestion dropdown is empty"
+      ]
+    },
+    {
+      "id": "community_403",
+      "reports": [
+        "Our community search returns 403 Forbidden for logged-in users",
+        "Users get access denied errors when searching the community",
+        "Community search page shows forbidden error since the morning",
+        "Searching from the community widget fails with HTTP 403",
+        "Permission error when customers search our community, they can't see any results",
+        "Community search broken: 403 for everyone",
+        "Search in the customer community is failing with access forbidden"
+      ]
+    }
+  ],
+  "near_misses": [
+    {
+      "id": "crawl_schedule_howto",
+      "reports": [
+        "How do I schedule a crawl to run every night?",
+        "Can I set a different crawl frequency per content source?",
+        "Where do I see when the next crawl will run?"
+      ]
+    },
+    {
+      "id": "autocomplete_howto",
+      "reports": [
+        "How do I turn on autocomplete in the search client?",
+        "Can autocomplete suggest article titles instead of queries?",
+        "How many suggestions does type-ahead show by default?"
+      ]
+    }
+  ],
+  "slow_topic": {
+    "id": "salesforce_howto",
+    "reports": [
+      "How do I add Salesforce as a content source?",
+      "What permissions does the Salesforce connector need?",
+      "How can I index Salesforce Knowledge articles?",
+      "Setting up the Salesforce content source, where do I start?",
+      "Can SearchUnify crawl Salesforce cases?",
+      "How do I configure the Salesforce connector?"
+    ]
+  }
+}

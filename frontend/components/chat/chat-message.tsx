@@ -2,7 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CheckCircle2, Headset, Info, Loader2, TriangleAlert } from "lucide-react";
+import { Activity, CheckCircle2, Headset, Info, Loader2, TriangleAlert } from "lucide-react";
 
 import { SentFileChips } from "@/components/attachments";
 import type { AttachmentMeta, Citation } from "@/lib/types";
@@ -12,7 +12,8 @@ export type UiMessage =
   | { kind: "customer"; text: string; attachments?: AttachmentMeta[] }
   | { kind: "ai"; text: string; citations: Citation[]; status?: string; streaming?: boolean }
   | { kind: "staff"; text: string; id: number }
-  | { kind: "notice"; text: string; tone: "info" | "success" | "warning" };
+  | { kind: "notice"; text: string; tone: "info" | "success" | "warning" }
+  | { kind: "known_issue"; number: string; notice: string };
 
 /** Turn [n] markers into links to the cited doc page. */
 function linkCitations(text: string, citations: Citation[]) {
@@ -68,6 +69,18 @@ export function ChatMessage({ message }: { message: UiMessage }) {
           {message.text}
         </div>
         <SentFileChips files={message.attachments ?? []} className="max-w-[85%] justify-end" />
+      </div>
+    );
+  }
+
+  if (message.kind === "known_issue") {
+    // the support team's own words, shown verbatim (never rewritten by the assistant)
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold">
+          <Activity className="size-3.5" /> Known issue · {message.number} · update from our support team
+        </p>
+        <p className="whitespace-pre-wrap">{message.notice}</p>
       </div>
     );
   }

@@ -1,0 +1,90 @@
+{
+  "_note": "Synthetic, hand-written. Incidents: the same outage reported by different customers in their own words. Near-misses: same product area within an hour, but different issues (must NOT become an incident). Slow topic: a popular how-to question spread over days (normal traffic, not a burst). Background: real SearchUnify questions from the golden sets.",
+  "incidents": [
+    {
+      "id": "salesforce_401",
+      "reports": [
+        "Salesforce crawl failed overnight with 401 Unauthorized, nothing changed on our side",
+        "Our Salesforce content source suddenly shows authentication failed (401) and stopped indexing cases",
+        "All Salesforce crawls are failing since this morning with an unauthorized error",
+        "Salesforce connector error: HTTP 401 when the crawl starts, knowledge articles not updating",
+        "Is something wrong with the Salesforce integration? Crawl keeps failing with invalid session / 401",
+        "Salesforce source re-authentication did not help, crawl still fails with 401",
+        "Since today our Salesforce cases are not being indexed, crawl log says unauthorized"
+      ]
+    },
+    {
+      "id": "search_slow",
+      "reports": [
+        "Search results take more than 10 seconds to load on our support portal",
+        "The search client is extremely slow today, queries time out",
+        "Our users report search is hanging and sometimes returns a timeout error",
+        "Search latency spiked this afternoon, every query takes forever",
+        "Search page spinner keeps loading for 15+ seconds before results appear",
+        "Searching in the community is very slow right now, is there an outage?",
+        "Queries to the search API are timing out since about an hour ago"
+      ]
+    },
+    {
+      "id": "analytics_empty",
+      "reports": [
+        "Analytics dashboard shows zero searches for today, which can't be right",
+        "Search analytics stopped updating, all reports are empty since this morning",
+        "No data in the analytics overview for the last few hours",
+        "Our click-through and search count charts are blank today",
+        "Analytics is showing 0 sessions even though our portal is busy",
+        "Search analytics reports have no data for today, yesterday was fine",
+        "The analytics page loads but every widget says no data available"
+      ]
+    },
+    {
+      "id": "sso_down",
+      "reports": [
+        "None of our admins can log in, SSO fails with invalid SAML assertion",
+        "Admin console SSO login is broken for everyone in our company today",
+        "We get an error after Okta redirects back: SAML response could not be validated",
+        "Single sign-on to the SearchUnify admin stopped working this morning",
+        "Our team cannot access the admin panel, SSO returns an authentication error",
+        "Login via Azure AD SSO fails for all admins with a signature validation error",
+        "SAML login to SearchUnify is failing for every user since 9am"
+      ]
+    }
+  ],
+  "near_misses": [
+    {
+      "id": "salesforce_howto",
+      "reports": [
+        "How do I add the Salesforce Knowledge article object to my content source?",
+        "Which Salesforce fields can be mapped for case comments?",
+        "Can SearchUnify crawl attachments on Salesforce cases?"
+      ]
+    },
+    {
+      "id": "analytics_howto",
+      "reports": [
+        "How do I export the analytics report to CSV?",
+        "What does click-through rate mean in the analytics dashboard?",
+        "Can I schedule a weekly analytics report by email?"
+      ]
+    },
+    {
+      "id": "sso_howto",
+      "reports": [
+        "How do I configure SAML SSO for the admin console?",
+        "Does SearchUnify support Azure AD as an identity provider?",
+        "Where do I upload the IdP certificate for single sign-on?"
+      ]
+    }
+  ],
+  "slow_topic": {
+    "id": "jira_howto",
+    "reports": [
+      "How do I add Jira as a content source?",
+      "What are the steps to connect Jira Cloud to SearchUnify?",
+      "How can I index our Jira issues in search?",
+      "Setting up a Jira content source, where do I start?",
+      "Can SearchUnify crawl Jira projects?",
+      "How do I configure the Jira connector?"
+    ]
+  }
+}

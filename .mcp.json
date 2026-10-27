@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "supportpilot": {
+      "command": "C:/Users/Lenovo/Desktop/AI_engineer_project/.venv/Scripts/python.exe",
+      "args": ["-m", "supportpilot.mcp_server"]
+    }
+  }
+}

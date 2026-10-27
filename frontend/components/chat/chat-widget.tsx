@@ -163,6 +163,15 @@ export function ChatWidget() {
                   : `Ticket ${e.number} created · ${e.category} · ${e.priority} priority`,
               });
               break;
+            case "known_issue": {
+              // the team's notice goes above the assistant's reply to it
+              const card: Item = { key: nextKey(), msg: { kind: "known_issue", number: e.number, notice: e.notice } };
+              setItems((xs) => {
+                const at = xs.findIndex((it) => it.key === aiKey);
+                return at < 0 ? [...xs, card] : [...xs.slice(0, at), card, ...xs.slice(at)];
+              });
+              break;
+            }
             case "handoff":
               setMode("human");
               push({ kind: "notice", tone: "info", text: `Ticket ${e.number}: a support team member will reply here.` });

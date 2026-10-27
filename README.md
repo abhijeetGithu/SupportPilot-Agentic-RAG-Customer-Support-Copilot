@@ -51,11 +51,17 @@ The knowledge base is the public **[SearchUnify documentation](https://docs.sear
 | | Ticket creation with **human-in-the-loop confirmation** (LangGraph `interrupt`) | ✅ Done |
 | | Escalation to a human with **live handoff** in the same chat (staff replies appear in the widget) | ✅ Done |
 | **ML** | DistilBERT ticket classifier (Colab GPU) vs TF-IDF baseline, MLflow, bootstrap CIs, temperature-scaling calibration | ✅ Done |
+| **Knowledge loop** | Resolved tickets → LLM-drafted, anonymised KB articles → staff review → indexed with the docs; the assistant answers with them (fix in answers 1/5 → 5/5 on synthetic gap cases) | ✅ Done |
+| | Agents link KB articles in replies: suggestions for the ticket, search, one-click insert, usage tracking | ✅ Done |
+| **Incidents** | Outage detection from ticket bursts: problem-report gate + similarity + distinct customers + Poisson burst test vs. 7-day baseline (19/20 outages, 0 false on the tuning set; 10/15 → 15/15 held-out); one notice/update for all affected customers; the chat shows the staff notice verbatim | ✅ Done |
+| | Doc gaps: every chat question logged with its doc coverage and outcome; uncovered questions clustered into topics (calibrated thresholds) | ✅ Done |
 | | Staff-feedback loop (reclassifications → training data) | 📋 Planned |
 | **App** | FastAPI backend: 17 endpoints, SSE token streaming, ticket-draft resume, staff APIs, JWT, model warm-up | ✅ Done |
 | | Next.js chat widget (streaming, citations, ticket-draft card, handoff), support pages, staff dashboard | ✅ Done |
 | | Ticket system: TicketService with PII masking, duplicate merge, classification, audit log (PostgreSQL) | ✅ Done |
-| **Integrations** | MCP server exposing `search_docs`, `create_ticket`, `get_ticket_status` | 📋 Planned |
+| | File uploads in chat and the contact form (screenshots, PDFs, logs): type checked by content, staff-only downloads; the agent reads log files | ✅ Done |
+| **Multimodal** | Screenshot and PDF understanding with a vision model (Groq Qwen 3.8): exact error extraction, product area, prompt-injection flag; used by the agent, the classifier and staff | ✅ Done |
+| **Integrations** | MCP server (stdio + HTTP) exposing `search_docs`, `create_ticket`, `get_ticket_status` with structured output, for Claude Desktop, Claude Code, Cursor | ✅ Done |
 | **LLMOps** | Prompt-injection and PII guardrails, Langfuse tracing (latency, tokens, cost) | 📋 Planned |
 | **Deploy** | Docker Compose, GitHub Actions CI, Vercel + Render deployment | 🏗️ Scaffolded |
 
@@ -252,6 +258,22 @@ or priority, a `reclassified` event is logged and exported as new training data 
 | Staff: ticket with classifier confidence, AI-suggested reply and audit log | Staff: inbox (urgent first, review flags) |
 |---|---|
 | ![Ticket detail](docs/images/staff-ticket.png) | ![Inbox](docs/images/staff-inbox.png) |
+
+| Staff: screenshots read by AI (exact error, injection warning) |
+|---|
+| ![AI reading of screenshots](docs/images/staff-ai-reading.png) |
+
+| Staff: KB article drafted from a resolved ticket | Customer: answer citing the published KB article |
+|---|---|
+| ![KB review](docs/images/kb-review.png) | ![Chat answer citing a KB article](docs/images/chat-kb-answer.png) |
+
+| Staff: doc gaps clustered into topics |
+|---|
+| ![Doc gaps](docs/images/doc-gaps.png) |
+
+| Staff: incident detected from a ticket burst | Customer: known issue shown in the chat |
+|---|---|
+| ![Incident](docs/images/incident.png) | ![Known issue in chat](docs/images/chat-known-issue.png) |
 
 ---
 
@@ -490,6 +512,25 @@ cd frontend && npm install && npm run dev        # http://localhost:3000
 
 Run the tests with `pytest`. To run everything in containers, use `docker compose up --build`.
 
+### Use the tools from Claude Desktop, Claude Code or Cursor (MCP)
+
+Add this to the client's MCP config (Claude Desktop: `claude_desktop_config.json`; Cursor: `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "supportpilot": {
+      "command": "C:\\path\\to\\AI_engineer_project\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "supportpilot.mcp_server"]
+    }
+  }
+}
+```
+
+Or with Claude Code: `claude mcp add supportpilot -- <path-to-venv-python> -m supportpilot.mcp_server`.
+For HTTP clients run `python -m supportpilot.mcp_server --http` (serves `http://127.0.0.1:8765/mcp`).
+Details: [docs/results/phase7_mcp_server.md](docs/results/phase7_mcp_server.md).
+
 ---
 
 ## 🗺️ Roadmap
@@ -500,7 +541,8 @@ Run the tests with `pytest`. To run everything in containers, use `docker compos
 - [x] **Phase 4:** LangGraph agent, tools, ticket confirmation interrupt, TicketService, memory, scenario evals
 - [x] **Phase 5:** FastAPI chat (SSE), tickets, admin and auth endpoints, live latency measurements
 - [x] **Phase 6:** Next.js chat widget, support pages, staff dashboard, Playwright end-to-end walk-through
-- [ ] **Phase 7:** MCP server for Claude Desktop / Cursor
+- [x] **Phase 7:** MCP server for Claude Desktop / Claude Code / Cursor (stdio + streamable HTTP)
+- [x] **Phase 7.5:** Self-improving copilot: screenshot and PDF understanding, knowledge loop and doc gaps, KB links in replies, incident detection
 - [ ] **Phase 8:** RAGAS and LLM-as-judge evals, agent scenario tests, guardrails
 - [ ] **Phase 9:** Langfuse observability, CI eval gate, cloud deployment and live demo
 

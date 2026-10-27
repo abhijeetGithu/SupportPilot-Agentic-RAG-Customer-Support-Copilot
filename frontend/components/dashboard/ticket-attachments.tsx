@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, Paperclip } from "lucide-react";
+import { CircleAlert, Download, FileText, Paperclip, Sparkles, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { formatSize } from "@/components/attachments";
@@ -10,7 +10,7 @@ import { formatDate } from "@/components/labels";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
-import type { Attachment } from "@/lib/types";
+import type { Attachment, FileAnalysis } from "@/lib/types";
 
 async function download(att: Attachment) {
   try {
@@ -45,6 +45,54 @@ function Thumbnail({ att }: { att: Attachment }) {
   );
 }
 
+const SOURCE_LABEL: Record<FileAnalysis["source"], string> = {
+  vision: "Read by AI",
+  pdf_text: "PDF text",
+  pdf_vision: "Scanned PDF, read by AI",
+};
+
+/** What the vision model / PDF reader found, so staff can triage without opening the file. */
+function AiReading({ analysis }: { analysis: FileAnalysis }) {
+  return (
+    <div className="space-y-1.5 border-t pt-1.5 text-[11px]">
+      <p className="flex min-w-0 items-center gap-1 font-medium text-muted-foreground">
+        <Sparkles className="size-3 shrink-0" />
+        <span className="shrink-0 whitespace-nowrap">{SOURCE_LABEL[analysis.source]}</span>
+        {analysis.product_area && (
+          <span className="min-w-0 truncate font-normal" title={analysis.product_area}>
+            · {analysis.product_area}
+          </span>
+        )}
+      </p>
+      {analysis.summary && <p className="leading-snug">{analysis.summary}</p>}
+      {analysis.error_messages.length > 0 && (
+        <ul className="space-y-1">
+          {analysis.error_messages.map((e) => (
+            <li key={e} className="flex gap-1 rounded bg-destructive/5 px-1.5 py-1 font-mono text-destructive">
+              <CircleAlert className="mt-px size-3 shrink-0" />
+              <span className="break-words">{e}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {analysis.contains_instructions && (
+        <p className="flex gap-1 rounded bg-amber-500/10 px-1.5 py-1 text-amber-800 dark:text-amber-300">
+          <TriangleAlert className="mt-px size-3 shrink-0" />
+          Contains text addressed to an AI (possible prompt injection). The assistant treated it as data.
+        </p>
+      )}
+      {analysis.visible_text && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Visible text</summary>
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted p-1.5 font-mono">
+            {analysis.visible_text}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function TicketAttachments({ attachments }: { attachments: Attachment[] }) {
   if (!attachments.length) return null;
   return (
@@ -73,6 +121,7 @@ export function TicketAttachments({ attachments }: { attachments: Attachment[] }
                 <Download className="size-4" />
               </Button>
             </div>
+            {a.analysis && <AiReading analysis={a.analysis} />}
           </li>
         ))}
       </ul>

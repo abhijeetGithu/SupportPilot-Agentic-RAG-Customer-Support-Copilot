@@ -38,6 +38,7 @@ class TicketOut(BaseModel):
     status: TicketStatus
     source: TicketSource
     assignee: str | None
+    incident_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -61,6 +62,7 @@ class AttachmentOut(BaseModel):
     kind: str  # image | pdf | text
     size_bytes: int
     uploaded_by: str
+    analysis: dict | None = None  # what the vision model / PDF reader found
     created_at: datetime
 
     model_config = {"from_attributes": True}

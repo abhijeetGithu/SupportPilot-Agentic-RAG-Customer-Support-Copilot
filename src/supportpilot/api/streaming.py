@@ -3,7 +3,7 @@
 Event types (mirrored in frontend/lib/types.ts ChatEvent):
   token {text} · tool_start {tool, query?} · tool_end {tool} · citations {citations}
   ticket_draft {draft} · ticket_created {number, category, priority, duplicate}
-  handoff {number} · done {ticket_number} · error {message}
+  handoff {number} · known_issue {number, notice} · done {ticket_number} · error {message}
 
 LangGraph is run with stream_mode=["messages", "updates"]: "messages" yields LLM tokens as they are
 generated, "updates" yields each node's state changes (tool calls, tool results, interrupts).
@@ -91,6 +91,8 @@ def stream_events(graph, graph_input, config: dict) -> Iterator[dict]:
                     elif isinstance(m, ToolMessage):
                         yield {"type": "tool_end", "tool": m.name}
                         art = m.artifact or {}
+                        if m.name == "search_docs" and art.get("known_issue"):
+                            yield {"type": "known_issue", **art["known_issue"]}
                         if m.name == "create_ticket" and art.get("number"):
                             yield {"type": "ticket_created", **art}
                         if m.name == "escalate_to_human" and art.get("number"):

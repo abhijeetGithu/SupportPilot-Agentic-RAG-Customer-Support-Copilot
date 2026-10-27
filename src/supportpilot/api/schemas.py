@@ -92,11 +92,19 @@ class CustomerTicketView(BaseModel):
     attachments: list[AttachmentOut] = []
 
 
+class IncidentBrief(BaseModel):
+    id: int
+    number: str
+    title: str
+    status: str
+
+
 class TicketDetail(BaseModel):
     ticket: TicketOut
     messages: list[TicketMessageOut]
     events: list[TicketEventOut]
     attachments: list[AttachmentOut] = []
+    incident: IncidentBrief | None = None
 
 
 class TicketPage(BaseModel):

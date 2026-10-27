@@ -5,6 +5,14 @@ import type {
   ChatEvent,
   ChatHistory,
   CustomerTicketView,
+  GapReport,
+  Incident,
+  IncidentDetail,
+  IncidentStatus,
+  KbArticle,
+  KbPublicArticle,
+  KbStatus,
+  KbSuggestion,
   Metrics,
   StaffMessages,
   SuggestedReply,
@@ -138,6 +146,45 @@ export const api = {
     request<TicketDetail>(`/admin/tickets/${id}`, { method: "PATCH", body: json(changes), staff: true }),
   staffReply: (id: number, body: string) =>
     request<TicketDetail>(`/admin/tickets/${id}/replies`, { method: "POST", body: json({ body }), staff: true }),
+
+  // knowledge loop
+  kbArticles: (params: { status?: KbStatus; ticket_id?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.ticket_id !== undefined) qs.set("ticket_id", String(params.ticket_id));
+    return request<KbArticle[]>(`/admin/kb?${qs}`, { staff: true });
+  },
+  draftKbFromTicket: (ticketId: number) =>
+    request<KbArticle>(`/admin/tickets/${ticketId}/kb-draft`, { method: "POST", staff: true }),
+  updateKb: (id: number, changes: Partial<Pick<KbArticle, "title" | "body" | "product_area" | "keywords">>) =>
+    request<KbArticle>(`/admin/kb/${id}`, { method: "PATCH", body: json(changes), staff: true }),
+  kbAction: (id: number, action: "publish" | "unpublish" | "reject") =>
+    request<KbArticle>(`/admin/kb/${id}/${action}`, { method: "POST", staff: true }),
+  kbSearch: (params: { q?: string; ticket_id?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set("q", params.q);
+    if (params.ticket_id !== undefined) qs.set("ticket_id", String(params.ticket_id));
+    return request<KbSuggestion[]>(`/admin/kb/search?${qs}`, { staff: true });
+  },
+  incidents: (status?: IncidentStatus) =>
+    request<Incident[]>(`/admin/incidents${status ? `?status=${status}` : ""}`, { staff: true }),
+  incident: (id: number) => request<IncidentDetail>(`/admin/incidents/${id}`, { staff: true }),
+  updateIncident: (id: number, changes: Partial<Pick<Incident, "title" | "summary" | "public_note">>) =>
+    request<IncidentDetail>(`/admin/incidents/${id}`, { method: "PATCH", body: json(changes), staff: true }),
+  summarizeIncident: (id: number) =>
+    request<IncidentDetail>(`/admin/incidents/${id}/summarize`, { method: "POST", staff: true }),
+  incidentUpdate: (id: number, body: string) =>
+    request<{ sent_to: number }>(`/admin/incidents/${id}/updates`, { method: "POST", body: json({ body }), staff: true }),
+  resolveIncident: (id: number, message: string | null, resolveTickets: boolean) =>
+    request<IncidentDetail>(`/admin/incidents/${id}/resolve`, {
+      method: "POST",
+      body: json({ message, resolve_tickets: resolveTickets }),
+      staff: true,
+    }),
+  removeIncidentTicket: (id: number, ticketId: number) =>
+    request<IncidentDetail>(`/admin/incidents/${id}/tickets/${ticketId}`, { method: "DELETE", staff: true }),
+  gaps: (days: number) => request<GapReport>(`/admin/gaps?days=${days}`, { staff: true }),
+  publicKb: (number: string) => request<KbPublicArticle>(`/kb/${encodeURIComponent(number)}`),
   suggestReply: (id: number) =>
     request<SuggestedReply>(`/admin/tickets/${id}/suggest-reply`, { method: "POST", staff: true }),
   escalations: () => request<TicketPage>("/admin/escalations", { staff: true }),

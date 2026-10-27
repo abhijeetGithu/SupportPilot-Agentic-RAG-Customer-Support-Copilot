@@ -2,12 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy.orm import object_session
 
 from supportpilot.api import deps
 from supportpilot.api.auth import require_staff
+from supportpilot.api.routes.knowledge import draft_in_background
 from supportpilot.api.schemas import (
     ClassifyRequest,
+    IncidentBrief,
     Metrics,
     ReplyCreate,
     SuggestedReply,
@@ -16,7 +19,8 @@ from supportpilot.api.schemas import (
     TicketPage,
 )
 from supportpilot.classifier.predict import TicketPrediction, classify_ticket
-from supportpilot.db.models import AuthorType, Ticket, TicketStatus
+from supportpilot.config import get_settings
+from supportpilot.db.models import AuthorType, Incident, Ticket, TicketStatus
 from supportpilot.tickets.schemas import AttachmentOut, TicketMessageOut, TicketOut, TicketUpdate
 from supportpilot.tickets.service import TicketService
 from supportpilot.tickets.suggest import suggest_reply
@@ -38,7 +42,15 @@ def _detail(ticket: Ticket) -> TicketDetail:
         messages=[TicketMessageOut.model_validate(m) for m in ticket.messages],
         events=[TicketEventOut.model_validate(e) for e in ticket.events],
         attachments=[AttachmentOut.model_validate(a) for a in ticket.attachments],
+        incident=_incident_brief(ticket),
     )
+
+
+def _incident_brief(ticket: Ticket) -> IncidentBrief | None:
+    if ticket.incident_id is None:
+        return None
+    i = object_session(ticket).get(Incident, ticket.incident_id)
+    return IncidentBrief(id=i.id, number=i.number, title=i.title, status=i.status) if i else None
 
 
 @router.get("/tickets", response_model=TicketPage)
@@ -65,10 +77,16 @@ def get_ticket(ticket_id: int, tickets: deps.Tickets):
 
 
 @router.patch("/tickets/{ticket_id}", response_model=TicketDetail)
-def update_ticket(ticket_id: int, body: TicketUpdate, tickets: deps.Tickets, staff: Staff):
-    _get(tickets, ticket_id)
+def update_ticket(
+    ticket_id: int, body: TicketUpdate, tickets: deps.Tickets, staff: Staff, background: BackgroundTasks
+):
+    was_resolved = _get(tickets, ticket_id).status == TicketStatus.RESOLVED.value
     ticket = tickets.update(ticket_id, body, actor=f"staff:{staff}")
     tickets.db.refresh(ticket)
+    if ticket.status == TicketStatus.RESOLVED.value and not was_resolved and get_settings().auto_draft_kb:
+        # learn from the fix: draft a KB article after the response is sent, in its own DB session
+        tickets.db.commit()
+        background.add_task(draft_in_background, ticket.id)
     return _detail(ticket)
 
 

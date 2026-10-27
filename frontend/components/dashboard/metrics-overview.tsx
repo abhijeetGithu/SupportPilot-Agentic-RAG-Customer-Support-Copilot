@@ -53,7 +53,7 @@ export function MetricsOverview() {
   );
 }
 
-function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
+export function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-xl border p-4">
       <p className="text-sm text-muted-foreground">{label}</p>

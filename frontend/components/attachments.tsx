@@ -170,14 +170,14 @@ export function SentFileChips({ files, className }: { files: AttachmentMeta[]; c
 const PICKS = [
   {
     label: "Image or screenshot",
-    hint: "PNG, JPG, GIF, WebP",
+    hint: "PNG, JPG, GIF, WebP · the assistant reads errors in screenshots",
     accept: IMAGE_TYPES,
     Icon: FileImage,
   },
-  { label: "PDF document", hint: "PDF", accept: DOC_TYPES, Icon: FileType2 },
+  { label: "PDF document", hint: "The assistant reads its text", accept: DOC_TYPES, Icon: FileType2 },
   {
     label: "Log or text file",
-    hint: "LOG, TXT, CSV, JSON, MD · the assistant can read these",
+    hint: "LOG, TXT, CSV, JSON, MD",
     accept: TEXT_TYPES,
     Icon: ScrollText,
   },

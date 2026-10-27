@@ -6,7 +6,7 @@ The engine is created lazily, so tests can point it at their own database with c
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -68,4 +68,21 @@ def get_db() -> Iterator[Session]:
 def init_db() -> None:
     from supportpilot.db import models  # noqa: F401  (register tables)
 
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    """create_all() doesn't alter existing tables, so add new nullable columns to them.
+    Small built-in migration for this project's additive changes (no renames or drops)."""
+    db_inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not db_inspector.has_table(table.name):
+                continue
+            existing = {c["name"] for c in db_inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in existing and col.nullable:
+                    col_type = col.type.compile(dialect=engine.dialect)
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {col_type}'))

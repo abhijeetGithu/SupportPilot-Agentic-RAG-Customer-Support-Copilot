@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from supportpilot import __version__
 from supportpilot.api import auth
-from supportpilot.api.routes import admin, chat, tickets, uploads
+from supportpilot.api.routes import admin, chat, incidents, knowledge, tickets, uploads
 from supportpilot.config import get_settings
 from supportpilot.db.base import init_db
 
@@ -50,7 +50,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (chat.router, tickets.router, admin.router, auth.router, uploads.router):
+ROUTERS = (chat.router, tickets.router, admin.router, auth.router, uploads.router, knowledge.admin, knowledge.public,
+           incidents.router)
+for r in ROUTERS:
     app.include_router(r, prefix="/api")
 
 

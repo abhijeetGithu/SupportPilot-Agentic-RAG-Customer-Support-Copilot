@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Inbox, LogOut, Siren, Sparkles } from "lucide-react";
+import { Activity, BarChart3, BookOpenCheck, Inbox, LogOut, SearchX, Siren, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api, staffToken } from "@/lib/api";
@@ -15,6 +15,9 @@ const NAV = [
   { href: "/dashboard", label: "Overview", icon: BarChart3 },
   { href: "/dashboard/tickets", label: "Tickets", icon: Inbox },
   { href: "/dashboard/escalations", label: "Escalations", icon: Siren },
+  { href: "/dashboard/incidents", label: "Incidents", icon: Activity },
+  { href: "/dashboard/knowledge", label: "Knowledge", icon: BookOpenCheck },
+  { href: "/dashboard/gaps", label: "Doc gaps", icon: SearchX },
 ];
 
 /** Client-side auth guard + sidebar. The API enforces auth; this only redirects to /login. */
@@ -33,6 +36,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     enabled: ready,
     refetchInterval: 10_000,
   });
+  const activeIncidents = useQuery({
+    queryKey: ["incidents", "active"],
+    queryFn: () => api.incidents("active"),
+    enabled: ready,
+    refetchInterval: 15_000,
+  });
+  const counts = {
+    "/dashboard/escalations": escalations.data?.total,
+    "/dashboard/incidents": activeIncidents.data?.length,
+  };
 
   useEffect(() => {
     // expired / invalid token: the API client cleared it on 401
@@ -51,8 +64,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           SupportPilot
         </Link>
         {/* the active link depends on the URL, which on dynamic routes is only known at runtime */}
-        <Suspense fallback={<SidebarNav pathname={null} escalations={escalations.data?.total} />}>
-          <ActiveSidebarNav escalations={escalations.data?.total} />
+        <Suspense fallback={<SidebarNav pathname={null} counts={counts} />}>
+          <ActiveSidebarNav counts={counts} />
         </Suspense>
         <Button
           variant="ghost"
@@ -71,16 +84,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   );
 }
 
-function ActiveSidebarNav({ escalations }: { escalations?: number }) {
-  return <SidebarNav pathname={usePathname()} escalations={escalations} />;
+type Counts = Record<string, number | undefined>;
+
+function ActiveSidebarNav({ counts }: { counts: Counts }) {
+  return <SidebarNav pathname={usePathname()} counts={counts} />;
 }
 
-function SidebarNav({ pathname, escalations }: { pathname: string | null; escalations?: number }) {
+function SidebarNav({ pathname, counts }: { pathname: string | null; counts: Counts }) {
   return (
     <nav className="flex flex-col gap-1">
       {NAV.map(({ href, label, icon: Icon }) => {
         const active = pathname !== null && (href === "/dashboard" ? pathname === href : pathname.startsWith(href));
-        const count = href === "/dashboard/escalations" ? escalations : undefined;
+        const count = counts[href];
         return (
           <Link
             key={href}

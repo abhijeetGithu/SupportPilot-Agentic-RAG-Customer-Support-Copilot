@@ -185,5 +185,7 @@ def test_suggest_reply_is_grounded_and_cited(db):
     t = db.get(Ticket, ticket.id)
     llm = FakeListChatModel(responses=["Hi! Use the Clone icon on the Search Clients page【1†L1-L2】."])
     out = suggest.suggest_reply(t, llm=llm, searcher=lambda q, expansions=None: [CHUNK, CHUNK])
-    assert out["body"].endswith("[1].")
+    reply, sources = out["body"].split("\n\n**Sources**\n")
+    assert reply.endswith("[1].")
+    assert sources == f"1. [{CHUNK.title}]({CHUNK.url})"  # the customer gets a link for every [n]
     assert [c["n"] for c in out["citations"]] == [1]  # only sources actually cited are returned

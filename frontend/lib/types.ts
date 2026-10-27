@@ -29,6 +29,7 @@ export interface Ticket {
   status: TicketStatus;
   source: TicketSource;
   assignee: string | null;
+  incident_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,7 +57,19 @@ export interface Attachment {
   kind: "image" | "pdf" | "text";
   size_bytes: number;
   uploaded_by: string;
+  analysis: FileAnalysis | null;
   created_at: string;
+}
+
+/** What the vision model / PDF reader found in a screenshot or PDF. */
+export interface FileAnalysis {
+  summary: string;
+  visible_text: string;
+  error_messages: string[];
+  product_area: string;
+  contains_instructions: boolean;
+  source: "vision" | "pdf_text" | "pdf_vision";
+  model: string | null;
 }
 
 export interface AttachmentMeta {
@@ -71,6 +84,7 @@ export interface TicketDetail {
   messages: TicketMessage[];
   events: TicketEvent[];
   attachments: Attachment[];
+  incident: { id: number; number: string; title: string; status: IncidentStatus } | null;
 }
 
 export interface TicketPage {
@@ -139,6 +153,104 @@ export type ChatEvent =
   | { type: "ticket_draft"; draft: TicketDraft } // followed by "done": wait for approve / edit / cancel
   | { type: "ticket_created"; number: string; category: string | null; priority: Priority; duplicate: boolean }
   | { type: "handoff"; number: string }
+  | { type: "known_issue"; number: string; notice: string }
   | { type: "stored"; message_id: number } // human mode: message saved for the support team
   | { type: "done"; ticket_number: string | null }
   | { type: "error"; message: string };
+
+// ---------- knowledge loop ----------
+export type KbStatus = "draft" | "published" | "rejected";
+
+export interface KbArticle {
+  id: number;
+  number: string;
+  source_ticket_id: number | null;
+  source_ticket_number: string | null;
+  title: string;
+  body: string;
+  product_area: string;
+  keywords: string[];
+  status: KbStatus;
+  doc_coverage: { title: string; url: string; score: number } | null;
+  generalizable: boolean;
+  draft_note: string;
+  model: string | null;
+  reviewed_by: string | null;
+  url: string;
+  linked_in_replies: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+
+/** A published article an agent can link in a reply; score = similarity to the ticket or search text. */
+export interface KbSuggestion {
+  id: number;
+  number: string;
+  title: string;
+  product_area: string;
+  url: string;
+  score: number;
+}
+
+export interface KbPublicArticle {
+  number: string;
+  title: string;
+  body: string;
+  product_area: string;
+  published_at: string | null;
+}
+
+export interface GapTopic {
+  label: string;
+  count: number;
+  sessions: number;
+  outcomes: Partial<Record<"answered" | "ticket" | "handoff" | "error", number>>;
+  avg_coverage: number | null;
+  closest_doc: { title: string; url: string } | null;
+  last_seen: string;
+  examples: string[];
+}
+
+export interface GapReport {
+  days: number;
+  threshold: number;
+  questions: number;
+  gap_questions: number;
+  ended_in_ticket_or_handoff: number;
+  topics: GapTopic[];
+}
+
+// ---------- incidents ----------
+export type IncidentStatus = "active" | "resolved";
+
+export interface Incident {
+  id: number;
+  number: string;
+  title: string;
+  summary: string;
+  status: IncidentStatus;
+  public_note: string;
+  tickets: number;
+  customers: number;
+  open_tickets: number;
+  detection: {
+    customers?: number;
+    tickets?: number;
+    baseline_similar?: number;
+    expected_per_window?: number;
+    p_value?: number;
+    window_minutes?: number;
+    opened_at?: string;
+  };
+  first_seen: string;
+  last_seen: string;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface IncidentDetail {
+  incident: Incident;
+  tickets: Ticket[];
+}

@@ -1,5 +1,6 @@
 """Customer chat: sessions, streamed agent turns (SSE), ticket-draft resume, history, handoff polling."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -21,9 +22,12 @@ from supportpilot.api.schemas import (
 )
 from supportpilot.api.streaming import stream_events, to_sse
 from supportpilot.attachments import UploadRejected, get_customer_attachments
+from supportpilot.db.base import session_scope
 from supportpilot.db.models import AuthorType, ChatSession, SessionMode, TicketStatus
+from supportpilot.knowledge.gaps import log_question
 from supportpilot.tickets.service import create_chat_session
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 Session = Annotated[ChatSession, Depends(deps.chat_session)]
 Graph = Annotated[object, Depends(deps.graph)]
@@ -74,7 +78,27 @@ def stream_chat(body: ChatRequest, session: Session, graph: Graph, tickets: deps
         raise HTTPException(status.HTTP_409_CONFLICT, "A ticket draft is waiting for approve, edit or cancel")
     graph_input = {**new_turn(body.message, files), "customer": _customer(session)}
     tickets.db.commit()  # links must be visible to the agent's own DB sessions
-    return _sse(stream_events(graph, graph_input, _cfg(session.id)))
+    return _sse(track_question(stream_events(graph, graph_input, _cfg(session.id)), session.id, body.message))
+
+
+def track_question(events, session_id: str, question: str):
+    """Pass events through; afterwards log the question with its outcome for the Doc gaps report."""
+    outcome = "answered"
+    try:
+        for e in events:
+            if e["type"] == "ticket_draft" and outcome == "answered":
+                outcome = "ticket"  # the assistant couldn't solve it in chat
+            elif e["type"] == "handoff":
+                outcome = "handoff"
+            elif e["type"] == "error":
+                outcome = "error"
+            yield e
+    finally:
+        try:
+            with session_scope() as db:
+                log_question(db, session_id, question, outcome)
+        except Exception:  # analytics must never affect the chat
+            log.warning("question logging failed", exc_info=True)
 
 
 @router.post("/chat/{session_id}/resume")

@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
 from supportpilot.api import deps
@@ -10,6 +11,7 @@ from supportpilot.api.auth import require_staff
 from supportpilot.attachments import UploadRejected, save_upload, storage_path
 from supportpilot.config import get_settings
 from supportpilot.db.models import Attachment
+from supportpilot.file_insights import analyze
 from supportpilot.tickets.schemas import AttachmentOut
 from supportpilot.tickets.service import get_chat_session
 
@@ -31,6 +33,8 @@ async def upload(
         att = save_upload(db, file.filename or "file", data, session_id=session_id)
     except UploadRejected as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
+    # read screenshots / PDFs now (~1 s), so the analysis is ready before the message is sent
+    att.analysis = await run_in_threadpool(analyze, att.kind, data)
     return AttachmentOut.model_validate(att)
 
 

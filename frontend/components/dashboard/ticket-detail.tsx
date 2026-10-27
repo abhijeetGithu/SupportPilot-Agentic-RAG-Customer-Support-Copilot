@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, CircleAlert, Headset, Sparkles, User } from "lucide-react";
+import { Activity, ArrowLeft, BookOpenCheck, Bot, CircleAlert, Headset, Sparkles, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { Markdown } from "@/components/chat/chat-message";
+import { KbLinkPicker } from "@/components/dashboard/kb-link-picker";
 import { TicketAttachments } from "@/components/dashboard/ticket-attachments";
 import { CATEGORIES, NativeSelect, PRIORITIES, PriorityBadge, STATUSES, StatusBadge, formatDate } from "@/components/labels";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import type { Citation, Ticket, TicketDetail as Detail } from "@/lib/types";
+import type { Citation, KbSuggestion, Ticket, TicketDetail as Detail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const AUTHOR = {
@@ -33,6 +34,12 @@ const EVENT_LABEL: Record<string, string> = {
   escalated: "Escalated to a human",
   reply: "Reply",
   duplicate_merged: "Duplicate report merged",
+  kb_linked: "KB article linked",
+  incident_opened: "Incident detected",
+  incident_linked: "Linked to incident",
+  incident_update: "Incident update sent",
+  incident_unlinked: "Removed from incident",
+  attachments_added: "Files attached",
 };
 
 function describeEvent(type: string, payload: Record<string, unknown> | null) {
@@ -42,6 +49,9 @@ function describeEvent(type: string, payload: Record<string, unknown> | null) {
   if ("field" in payload) return `${payload.field}: ${payload.old ?? "—"} → ${payload.new}`;
   if (type === "escalated") return String(payload.reason ?? "");
   if (type === "created") return `via ${payload.source}`;
+  if (type === "kb_linked") return (payload.articles as string[]).join(", ");
+  if (type.startsWith("incident_")) return String(payload.incident ?? "");
+  if (type === "attachments_added") return (payload.files as string[]).join(", ");
   return "";
 }
 
@@ -67,7 +77,7 @@ export function TicketDetail() {
 
   if (error) return <p className="text-sm text-destructive">Couldn’t load ticket: {String(error)}</p>;
   if (!data) return <Skeleton className="h-96 w-full rounded-xl" />;
-  const { ticket: t, messages, events, attachments } = data;
+  const { ticket: t, messages, events, attachments, incident } = data;
 
   return (
     <div className="space-y-6">
@@ -85,6 +95,25 @@ export function TicketDetail() {
           {t.customer_name} · {t.customer_email} · opened {formatDate(t.created_at)} via {t.source}
         </p>
       </div>
+
+      {incident && (
+        <Link
+          href={`/dashboard/incidents/${incident.id}`}
+          className={cn(
+            "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+            incident.status === "active"
+              ? "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+              : "bg-muted/50",
+          )}
+        >
+          <Activity className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            Part of {incident.status === "active" ? "active" : "resolved"} incident{" "}
+            <span className="font-medium">{incident.number}</span>: {incident.title}
+          </span>
+          <span className="text-xs underline underline-offset-2">Open incident</span>
+        </Link>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
@@ -154,6 +183,13 @@ export function TicketDetail() {
             </Field>
           </section>
 
+          <KnowledgeCard
+            key={String(t.status === "resolved")} // remount on resolve: restarts the "drafting" window
+            ticketId={ticketId}
+            resolved={t.status === "resolved" || t.status === "closed"}
+            hasStaffReply={messages.some((m) => m.author_type === "staff")}
+          />
+
           <section className="rounded-xl border p-4">
             <p className="mb-3 text-xs font-medium text-muted-foreground">Activity</p>
             <ol className="space-y-3 border-l pl-4">
@@ -173,6 +209,61 @@ export function TicketDetail() {
   );
 }
 
+/** The KB article learned from this ticket, or a button to draft one from the staff reply. */
+function KnowledgeCard({ ticketId, resolved, hasStaffReply }: { ticketId: number; resolved: boolean; hasStaffReply: boolean }) {
+  const qc = useQueryClient();
+  // resolving starts a background draft (~10 s): poll for up to 45 s until it appears
+  const [waiting, setWaiting] = useState(resolved && hasStaffReply);
+  useEffect(() => {
+    const id = setTimeout(() => setWaiting(false), 45_000);
+    return () => clearTimeout(id);
+  }, []);
+  const { data: articles } = useQuery({
+    queryKey: ["kb", "ticket", ticketId],
+    queryFn: () => api.kbArticles({ ticket_id: ticketId }),
+    refetchInterval: (q) => (waiting && !q.state.data?.length ? 3000 : false),
+  });
+  const draft = useMutation({
+    mutationFn: () => api.draftKbFromTicket(ticketId),
+    onSuccess: (a) => {
+      toast.success(`${a.number} drafted`, { description: "Review it on the Knowledge page." });
+      qc.invalidateQueries({ queryKey: ["kb"] });
+    },
+    onError: (e) => toast.error("Couldn't draft an article", { description: String(e) }),
+  });
+  const article = articles?.find((a) => a.status !== "rejected") ?? articles?.[0];
+  if (!hasStaffReply && !article) return null;
+  return (
+    <section className="space-y-2 rounded-xl border p-4 text-sm">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <BookOpenCheck className="size-3.5" /> Knowledge base
+      </p>
+      {article ? (
+        <>
+          <p className="font-medium leading-snug">{article.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {article.number} · {article.status === "draft" ? "waiting for review" : article.status}
+          </p>
+          <Link href="/dashboard/knowledge" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            {article.status === "draft" ? "Review article" : "Open in Knowledge"}
+          </Link>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {waiting
+              ? "Drafting an article from this fix…"
+              : "Turn this fix into an article so the assistant can answer it next time."}
+          </p>
+          <Button size="sm" variant="outline" disabled={draft.isPending} onClick={() => draft.mutate()}>
+            <Sparkles className="size-3.5" /> {draft.isPending ? "Drafting…" : "Draft KB article"}
+          </Button>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -187,6 +278,22 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function ReplyComposer({ ticketId, disabled, onSent }: { ticketId: number; disabled: boolean; onSent: (d: Detail) => void }) {
   const [body, setBody] = useState("");
   const [sources, setSources] = useState<Citation[]>([]);
+  const [linking, setLinking] = useState(false);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const insertLink = (a: KbSuggestion) => {
+    const link = `[${a.title}](${a.url})`;
+    if (!body.trim()) {
+      setBody(`This article walks through the fix: ${link}`);
+      return;
+    }
+    const el = textarea.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const before = body.slice(0, start);
+    const spaced = before && !/\s$/.test(before) ? ` ${link}` : link;
+    setBody(before + spaced + body.slice(end));
+    toast.success(`Linked ${a.number}`);
+  };
   const suggest = useMutation({
     mutationFn: () => api.suggestReply(ticketId),
     onSuccess: (r) => {
@@ -210,11 +317,18 @@ function ReplyComposer({ ticketId, disabled, onSent }: { ticketId: number; disab
     <section className="space-y-2 rounded-xl border p-4">
       <div className="flex items-center justify-between">
         <Label htmlFor="reply">Reply to customer</Label>
-        <Button variant="outline" size="sm" className="gap-1.5" disabled={disabled || suggest.isPending} onClick={() => suggest.mutate()}>
-          <Sparkles className="size-3.5" /> {suggest.isPending ? "Drafting…" : "Suggest reply"}
-        </Button>
+        <div className="flex gap-1.5">
+          <Button variant={linking ? "secondary" : "outline"} size="sm" className="gap-1.5" disabled={disabled}
+                  aria-expanded={linking} onClick={() => setLinking((v) => !v)}>
+            <BookOpenCheck className="size-3.5" /> Link KB article
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" disabled={disabled || suggest.isPending} onClick={() => suggest.mutate()}>
+            <Sparkles className="size-3.5" /> {suggest.isPending ? "Drafting…" : "Suggest reply"}
+          </Button>
+        </div>
       </div>
-      <Textarea id="reply" rows={8} value={body} onChange={(e) => setBody(e.target.value)} disabled={disabled} placeholder="Write a reply, or let the assistant draft one from the docs." />
+      {linking && !disabled && <KbLinkPicker ticketId={ticketId} onInsert={insertLink} />}
+      <Textarea id="reply" ref={textarea} rows={8} value={body} onChange={(e) => setBody(e.target.value)} disabled={disabled} placeholder="Write a reply, or let the assistant draft one from the docs." />
       {sources.length > 0 && (
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           <span className="text-muted-foreground">Sources:</span>

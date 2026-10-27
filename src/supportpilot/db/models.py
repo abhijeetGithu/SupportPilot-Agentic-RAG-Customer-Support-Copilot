@@ -1,4 +1,6 @@
-"""Tables: chat_sessions, tickets, ticket_messages, ticket_events. See docs/ARCHITECTURE.md §3."""
+"""Tables: chat_sessions, tickets, ticket_messages, ticket_events, attachments, kb_articles, question_logs,
+incidents.
+See docs/ARCHITECTURE.md §3."""
 
 import uuid
 from datetime import datetime
@@ -70,7 +72,9 @@ class Ticket(Base):
     status: Mapped[str] = mapped_column(String(16), default=TicketStatus.OPEN.value, index=True)
     source: Mapped[str] = mapped_column(String(10))
     assignee: Mapped[str | None] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id"), index=True)
+    embedding: Mapped[list | None] = mapped_column(JSON)  # normalized bge vector, for incident detection
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
@@ -133,6 +137,96 @@ class Attachment(Base):
     kind: Mapped[str] = mapped_column(String(10))  # image | pdf | text
     size_bytes: Mapped[int]
     uploaded_by: Mapped[str] = mapped_column(String(10), default="customer")
+    # what the vision model / PDF reader found (summary, visible_text, error_messages, ...); None if not analyzed
+    analysis: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     ticket: Mapped[Ticket | None] = relationship(back_populates="attachments")
+
+    def summary_line(self) -> str:
+        """One line about what the file shows (from the analysis), e.g. for ticket classification."""
+        a = self.analysis or {}
+        errors = "; ".join(a.get("error_messages") or [])
+        return " ".join(x for x in (a.get("summary", ""), a.get("product_area", ""), errors) if x)
+
+
+class KbStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    REJECTED = "rejected"
+
+
+class KbArticle(Base):
+    """Knowledge-base article drafted by the LLM from a resolved ticket, reviewed by staff.
+    Published articles are indexed in Qdrant next to the docs, so the assistant can answer with them."""
+
+    __tablename__ = "kb_articles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_ticket_id: Mapped[int | None] = mapped_column(ForeignKey("tickets.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)  # markdown: problem, symptoms, cause, resolution
+    product_area: Mapped[str] = mapped_column(String(120), default="")
+    keywords: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(12), default=KbStatus.DRAFT.value, index=True)
+    # closest existing doc when drafted: {"title", "url", "score"}; helps staff spot duplicates of the docs
+    doc_coverage: Mapped[dict | None] = mapped_column(JSON)
+    generalizable: Mapped[bool] = mapped_column(Boolean, default=True)  # LLM's view: useful beyond this customer?
+    draft_note: Mapped[str] = mapped_column(Text, default="")  # why (not) generalizable
+    model: Mapped[str | None] = mapped_column(String(80))
+    reviewed_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    source_ticket: Mapped[Ticket | None] = relationship()
+
+    @property
+    def number(self) -> str:
+        return f"KB-{self.id:05d}"
+
+
+class QuestionLog(Base):
+    """One customer question in the chat, with how well the docs covered it. Feeds the Doc gaps page."""
+
+    __tablename__ = "question_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str | None] = mapped_column(ForeignKey("chat_sessions.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)  # PII-masked
+    coverage: Mapped[float | None] = mapped_column(Float)  # cosine similarity of the best doc/KB chunk
+    top_title: Mapped[str | None] = mapped_column(String(255))
+    top_url: Mapped[str | None] = mapped_column(String(500))
+    outcome: Mapped[str] = mapped_column(String(12))  # answered | ticket | handoff | error
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class IncidentStatus(StrEnum):
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+
+
+class Incident(Base):
+    """A burst of similar tickets from different customers (likely an outage), detected automatically."""
+
+    __tablename__ = "incidents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(10), default=IncidentStatus.ACTIVE.value, index=True)
+    # staff-written status message; the assistant and auto-replies only ever show this text to customers
+    public_note: Mapped[str] = mapped_column(Text, default="")
+    centroid: Mapped[list] = mapped_column(JSON)  # mean of member embeddings (normalized)
+    detection: Mapped[dict] = mapped_column(JSON, default=dict)  # window count, baseline rate, p-value
+    first_seen: Mapped[datetime] = mapped_column(DateTime)
+    last_seen: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    resolved_by: Mapped[str | None] = mapped_column(String(80))
+
+    tickets: Mapped[list[Ticket]] = relationship(order_by="Ticket.created_at")
+
+    @property
+    def number(self) -> str:
+        return f"INC-{self.id:05d}"
