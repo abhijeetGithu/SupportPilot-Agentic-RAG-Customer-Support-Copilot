@@ -123,7 +123,7 @@ def test_escalation_hands_off_to_human(env):
 
 
 def test_step_limit_stops_tool_loops(env, monkeypatch):
-    monkeypatch.setattr("supportpilot.agent.graph.get_settings", lambda: type("S", (), {"max_agent_steps": 2})())
+    monkeypatch.setattr("supportpilot.agent.graph.get_settings", lambda: type("S", (), {"max_agent_steps": 2, "self_check": False, "output_guard": True})())
     script = [call("search_docs", i=i, query=f"q{i}") for i in range(5)]
     _, _, out = run(script, env, "loop forever")
     assert out["steps"] == 2 and "create a support ticket" in out["messages"][-1].content

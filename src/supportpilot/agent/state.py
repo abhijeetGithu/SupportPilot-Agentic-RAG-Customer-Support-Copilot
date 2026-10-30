@@ -28,3 +28,5 @@ class AgentState(TypedDict, total=False):
     citations: list[Citation]  # sources retrieved in the current turn (reset by the caller)
     ticket_number: str | None  # set once a ticket exists for this session
     handed_off: bool
+    grounding: dict | None  # self-check result for the last answer (verdict, claims, supported, ...)
+    output_guard: dict | None  # what the output guard changed in the last answer (reasons, text)

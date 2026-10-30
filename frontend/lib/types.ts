@@ -154,6 +154,15 @@ export type ChatEvent =
   | { type: "ticket_created"; number: string; category: string | null; priority: Priority; duplicate: boolean }
   | { type: "handoff"; number: string }
   | { type: "known_issue"; number: string; notice: string }
+  | {
+      type: "grounding";
+      verdict: "grounded" | "revised" | "no_claims" | "unchecked";
+      claims?: number;
+      supported?: number;
+      unsupported?: string[];
+      revised_text?: string;
+    }
+  | { type: "output_guard"; reasons: string[]; text: string }
   | { type: "stored"; message_id: number } // human mode: message saved for the support team
   | { type: "done"; ticket_number: string | null }
   | { type: "error"; message: string };

@@ -24,6 +24,7 @@ from supportpilot.api.streaming import stream_events, to_sse
 from supportpilot.attachments import UploadRejected, get_customer_attachments
 from supportpilot.db.base import session_scope
 from supportpilot.db.models import AuthorType, ChatSession, SessionMode, TicketStatus
+from supportpilot.guardrails.input_guard import check_input
 from supportpilot.knowledge.gaps import log_question
 from supportpilot.tickets.service import create_chat_session
 
@@ -76,7 +77,8 @@ def stream_chat(body: ChatRequest, session: Session, graph: Graph, tickets: deps
 
     if graph.get_state(_cfg(session.id)).interrupts:
         raise HTTPException(status.HTTP_409_CONFLICT, "A ticket draft is waiting for approve, edit or cancel")
-    graph_input = {**new_turn(body.message, files), "customer": _customer(session)}
+    guard = check_input(body.message)  # flags, never blocks (see guardrails/input_guard.py)
+    graph_input = {**new_turn(body.message, files, flagged=guard.flagged), "customer": _customer(session)}
     tickets.db.commit()  # links must be visible to the agent's own DB sessions
     return _sse(track_question(stream_events(graph, graph_input, _cfg(session.id)), session.id, body.message))
 

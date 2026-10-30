@@ -45,3 +45,19 @@ def no_incident_detection(monkeypatch):
 
     monkeypatch.setattr(detector, "on_ticket_created", lambda db, ticket, now=None: None)
     monkeypatch.setattr(detector, "match_active", lambda db, text, threshold=None: None)
+
+
+@pytest.fixture(autouse=True)
+def no_self_check(monkeypatch):
+    """The self-check calls a second LLM; tests that need it fake it (tests/test_grounding.py)."""
+    from supportpilot.agent import grounding
+
+    monkeypatch.setattr(grounding, "verify_turn", lambda messages, reviser_llm, checker=None: None)
+
+
+@pytest.fixture(autouse=True)
+def no_prompt_guard_calls(monkeypatch):
+    """The input guard calls Prompt Guard on Groq; tests get a score of 0 unless they fake one."""
+    from supportpilot.guardrails import input_guard
+
+    monkeypatch.setattr(input_guard, "injection_score", lambda text: 0.0)

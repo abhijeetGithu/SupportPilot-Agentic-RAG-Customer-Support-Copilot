@@ -65,6 +65,17 @@ class Settings(BaseSettings):
     # answerable golden questions, catches 16/20 off-topic ones (docs/results/phase7_5b_knowledge_loop.md)
     gap_coverage_threshold: float = 0.66
 
+    # Guardrails (Phase 8). Prompt Guard flags (never blocks): it scored normal messages like "ignore my
+    # last message, I meant Confluence" at 0.997. See docs/results/phase8_trust.md
+    input_guard: bool = True
+    prompt_guard_model: str = "meta-llama/llama-prompt-guard-2-86m"
+    injection_threshold: float = 0.9
+    output_guard: bool = True
+
+    # Self-check (Phase 8): claims in doc-based answers are verified by a second model before they stand
+    self_check: bool = True
+    self_check_model: str = "openai/gpt-oss-20b"  # separate Groq quota from the chat model
+
     # Incident detection (Phase 7.5c): a burst of similar tickets from different customers
     detect_incidents: bool = True
     # pairs: 0.74 links 81% of same-outage pairs, 3% of near-misses; replaying traffic, 0.74-0.78 all work and

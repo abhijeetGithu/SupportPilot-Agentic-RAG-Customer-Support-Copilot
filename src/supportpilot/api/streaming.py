@@ -3,7 +3,9 @@
 Event types (mirrored in frontend/lib/types.ts ChatEvent):
   token {text} · tool_start {tool, query?} · tool_end {tool} · citations {citations}
   ticket_draft {draft} · ticket_created {number, category, priority, duplicate}
-  handoff {number} · known_issue {number, notice} · done {ticket_number} · error {message}
+  handoff {number} · known_issue {number, notice}
+  grounding {verdict, claims, supported, unsupported, revised_text?} · output_guard {reasons, text}
+  done {ticket_number} · error {message}
 
 LangGraph is run with stream_mode=["messages", "updates"]: "messages" yields LLM tokens as they are
 generated, "updates" yields each node's state changes (tool calls, tool results, interrupts).
@@ -49,8 +51,23 @@ class CitationStreamFixer:
 
 def stream_events(graph, graph_input, config: dict) -> Iterator[dict]:
     """Run the graph and yield event dicts. Never raises: failures become an `error` event."""
+    from supportpilot.agent.graph import PROMPT_NGRAMS
+    from supportpilot.guardrails.output_guard import leaks
+
     fixer = CitationStreamFixer()
     streamed_ids: set[str] = set()
+    shown, cut_off = "", False  # text sent this turn; stop streaming once it would leak the system prompt
+
+    def safe(text: str) -> str:
+        nonlocal shown, cut_off
+        if cut_off or not text:
+            return ""
+        if leaks(shown + text, PROMPT_NGRAMS):
+            cut_off = True  # the guard node replaces the answer; the leak never reaches the browser
+            return ""
+        shown += text
+        return text
+
     try:
         for mode, chunk in graph.stream(graph_input, config, stream_mode=["messages", "updates"]):
             if mode == "messages":
@@ -61,7 +78,7 @@ def stream_events(graph, graph_input, config: dict) -> Iterator[dict]:
                     streamed_ids.add(msg.id)
                 text = msg.content if isinstance(msg.content, str) else ""
                 if text and not getattr(msg, "tool_call_chunks", None):
-                    out = fixer.feed(text)
+                    out = safe(fixer.feed(text))
                     if out:
                         yield {"type": "token", "text": out}
                 continue
@@ -77,7 +94,7 @@ def stream_events(graph, graph_input, config: dict) -> Iterator[dict]:
                     continue
                 for m in update.get("messages", []):
                     if isinstance(m, AIMessage) and m.tool_calls:
-                        tail = fixer.flush()
+                        tail = safe(fixer.flush())
                         if tail:
                             yield {"type": "token", "text": tail}
                         for call in m.tool_calls:
@@ -97,10 +114,14 @@ def stream_events(graph, graph_input, config: dict) -> Iterator[dict]:
                             yield {"type": "ticket_created", **art}
                         if m.name == "escalate_to_human" and art.get("number"):
                             yield {"type": "handoff", "number": art["number"]}
+                if update.get("output_guard"):
+                    yield {"type": "output_guard", **update["output_guard"]}
+                if update.get("grounding"):
+                    yield {"type": "grounding", **update["grounding"]}
                 if update.get("citations"):
                     yield {"type": "citations", "citations": update["citations"]}
 
-        tail = fixer.flush()
+        tail = safe(fixer.flush())
         if tail:
             yield {"type": "token", "text": tail}
         state = graph.get_state(config)

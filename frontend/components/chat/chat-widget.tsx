@@ -163,6 +163,15 @@ export function ChatWidget() {
                   : `Ticket ${e.number} created · ${e.category} · ${e.priority} priority`,
               });
               break;
+            case "grounding":
+              patchAi(aiKey, (m) => ({
+                check: { verdict: e.verdict, claims: e.claims, supported: e.supported, unsupported: e.unsupported },
+                text: e.revised_text ?? m.text,
+              }));
+              break;
+            case "output_guard":
+              patchAi(aiKey, () => ({ text: e.text, guarded: e.reasons }));
+              break;
             case "known_issue": {
               // the team's notice goes above the assistant's reply to it
               const card: Item = { key: nextKey(), msg: { kind: "known_issue", number: e.number, notice: e.notice } };
