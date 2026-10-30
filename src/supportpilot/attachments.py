@@ -36,7 +36,8 @@ class UploadRejected(ValueError):
 
 
 def sanitize_filename(name: str) -> str:
-    name = Path(name or "file").name  # drop any path the browser sent
+    # drop any path the browser sent; split on both separators: on a Linux server, Path() keeps "C:\Users\..."
+    name = re.split(r"[\\/]", name or "file")[-1]
     name = re.sub(r"[^A-Za-z0-9._ ()-]+", "_", name).strip(" .") or "file"
     stem, dot, ext = name.rpartition(".")
     return (stem[:100] + dot + ext[:10]) if dot else name[:110]

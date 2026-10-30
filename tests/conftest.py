@@ -74,3 +74,15 @@ def no_rate_limits(monkeypatch):
     ratelimit.reset()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def dummy_groq_key(monkeypatch):
+    """App startup builds a Groq client (never called in tests). A dummy key keeps tests working without a
+    real one (CI) and guarantees they can't spend the real one (it overrides .env)."""
+    from supportpilot.config import get_settings
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test_dummy_never_used")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

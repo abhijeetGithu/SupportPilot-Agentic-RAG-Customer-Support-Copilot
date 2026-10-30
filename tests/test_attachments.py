@@ -112,3 +112,14 @@ def test_chat_attachment_is_read_by_agent_and_linked_to_the_new_ticket(files_cli
     detail = c.get(f"/api/admin/tickets/{tid}", headers=h).json()
     assert [a["filename"] for a in detail["attachments"]] == ["crawl.log"]
     assert "[Attached: crawl.log]" in detail["messages"][0]["body"]
+
+
+def test_sanitize_filename_strips_paths_on_any_server_os(monkeypatch):
+    # Path() only knows the server's own separator; uploads come from Windows and Unix browsers alike
+    import pathlib
+
+    from supportpilot import attachments
+
+    monkeypatch.setattr(attachments, "Path", pathlib.PurePosixPath)  # behave like the Linux server
+    assert sanitize_filename("C:\\Users\\me\\error log (1).txt") == "error log (1).txt"
+    assert sanitize_filename("/home/me/crawl.log") == "crawl.log"
