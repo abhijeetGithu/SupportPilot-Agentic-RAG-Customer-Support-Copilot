@@ -17,5 +17,6 @@ const noop = () => () => {};
 export function useStaffToken() {
   const mounted = useSyncExternalStore(noop, () => true, () => false);
   const token = useSyncExternalStore(subscribe, () => staffToken.get(), () => null);
-  return { mounted, token };
+  const role = useSyncExternalStore(subscribe, () => staffToken.role(), () => null);
+  return { mounted, token, role };
 }

@@ -15,6 +15,8 @@ from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.core.schema import TextNode
 from llama_index.core.utils import get_tokenizer
 
+from supportpilot.retrieval.text import embedding_text  # noqa: F401  (re-exported)
+
 _tokenizer = get_tokenizer()
 
 
@@ -86,15 +88,3 @@ def chunk_documents(docs: list[Document], chunk_size: int, chunk_overlap: int) -
                 )
             )
     return chunks
-
-
-def embedding_text(meta: dict, text: str) -> str:
-    """Contextual chunk header + body. Used for both dense and BM25 vectors."""
-    title = meta["title"]
-    heading = meta.get("heading") or ""
-    if heading == title:
-        heading = ""
-    elif heading.startswith(title + " > "):
-        heading = heading[len(title) + 3 :]
-    parts = [title, meta["section"].replace("-", " "), heading]
-    return " > ".join(p for p in parts if p) + "\n\n" + text

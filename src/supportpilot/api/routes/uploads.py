@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from supportpilot.api import deps
 from supportpilot.api.auth import require_staff
+from supportpilot.api.ratelimit import limit
 from supportpilot.attachments import UploadRejected, save_upload, storage_path
 from supportpilot.config import get_settings
 from supportpilot.db.models import Attachment
@@ -18,7 +19,8 @@ from supportpilot.tickets.service import get_chat_session
 router = APIRouter(tags=["uploads"])
 
 
-@router.post("/uploads", response_model=AttachmentOut, status_code=status.HTTP_201_CREATED)
+@router.post("/uploads", response_model=AttachmentOut, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(limit("upload", 10, 600))])
 async def upload(
     db: deps.DB,
     file: Annotated[UploadFile, File()],

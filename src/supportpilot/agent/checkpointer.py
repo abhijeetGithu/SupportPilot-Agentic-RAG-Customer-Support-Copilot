@@ -13,14 +13,18 @@ from supportpilot.config import get_settings
 
 
 def make_checkpointer(database_url: str | None = None) -> BaseCheckpointSaver:
-    url = database_url or get_settings().database_url
+    from supportpilot.db.base import normalize_db_url
+
+    url = normalize_db_url(database_url or get_settings().database_url)
     if url.startswith("postgresql"):
         from langgraph.checkpoint.postgres import PostgresSaver
         from psycopg.rows import dict_row
         from psycopg_pool import ConnectionPool
 
         conninfo = url.replace("postgresql+psycopg://", "postgresql://")
-        pool = ConnectionPool(conninfo, max_size=10, kwargs={"autocommit": True, "row_factory": dict_row})
+        # check=: serverless Postgres (Neon) suspends when idle, so validate pooled connections before use
+        pool = ConnectionPool(conninfo, max_size=5, check=ConnectionPool.check_connection,
+                              kwargs={"autocommit": True, "row_factory": dict_row})
         saver = PostgresSaver(pool)
         saver.setup()  # creates the checkpoint tables if missing
         return saver

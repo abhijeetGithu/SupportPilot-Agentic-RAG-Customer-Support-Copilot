@@ -1,0 +1,48 @@
+[
+  {
+    "task": "queue",
+    "test_rows": 2366,
+    "fp32": {
+      "size_mb": 268.0,
+      "accuracy": 0.6217,
+      "macro_f1": 0.6523,
+      "agrees_with_pytorch": 0.9992,
+      "max_logit_diff_vs_pytorch": 0.0,
+      "cpu_ms_per_ticket": 142.8
+    },
+    "int8": {
+      "size_mb": 67.4,
+      "accuracy": 0.6082,
+      "macro_f1": 0.6388,
+      "agrees_with_pytorch": 0.8698,
+      "max_logit_diff_vs_pytorch": 4.73,
+      "cpu_ms_per_ticket": 95.5
+    },
+    "pytorch_reference": {
+      "macro_f1": 0.6521
+    }
+  },
+  {
+    "task": "priority",
+    "test_rows": 2366,
+    "fp32": {
+      "size_mb": 267.9,
+      "accuracy": 0.7194,
+      "macro_f1": 0.7158,
+      "agrees_with_pytorch": 0.9996,
+      "max_logit_diff_vs_pytorch": 0.0,
+      "cpu_ms_per_ticket": 141.6
+    },
+    "int8": {
+      "size_mb": 67.4,
+      "accuracy": 0.7079,
+      "macro_f1": 0.704,
+      "agrees_with_pytorch": 0.9159,
+      "max_logit_diff_vs_pytorch": 5.412,
+      "cpu_ms_per_ticket": 97.9
+    },
+    "pytorch_reference": {
+      "macro_f1": 0.7162
+    }
+  }
+]

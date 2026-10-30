@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from supportpilot import __version__
 from supportpilot.api import auth
 from supportpilot.api.routes import admin, chat, incidents, knowledge, tickets, uploads
-from supportpilot.config import get_settings
+from supportpilot.config import check_production, get_settings
 from supportpilot.db.base import init_db
 
 log = logging.getLogger("supportpilot")
@@ -22,7 +22,8 @@ def warm_up() -> None:
     from supportpilot.retrieval import embeddings
 
     t0 = time.perf_counter()
-    classify_ticket("warm-up ticket: the search page shows no results")
+    if get_settings().classifier_keep_loaded:
+        classify_ticket("warm-up ticket: the search page shows no results")
     embeddings.embed_query("warm up")
     embeddings.sparse_query("warm up")
     log.info("models warmed up in %.1fs", time.perf_counter() - t0)
@@ -30,6 +31,9 @@ def warm_up() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    s = get_settings()
+    if s.environment == "production" and (problems := check_production(s)):
+        raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
     init_db()
     if getattr(app.state, "graph", None) is None:  # tests inject their own graph
         from supportpilot.agent.checkpointer import make_checkpointer
@@ -57,5 +61,6 @@ for r in ROUTERS:
 
 
 @app.get("/health")
+@app.get("/api/health")  # same, under the API prefix the frontend uses (wake-up check on the free tier)
 def health() -> dict:
     return {"status": "ok", "version": __version__}

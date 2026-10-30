@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     # Retrieval
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None  # Qdrant Cloud
+    embedding_cache_dir: str | None = None  # where fastembed keeps its ONNX models (baked into the Docker image)
     qdrant_collection: str = "support_docs"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     sparse_model: str = "Qdrant/bm25"
@@ -87,21 +89,44 @@ class Settings(BaseSettings):
     incident_max_p_value: float = 0.01  # Poisson: this many similar tickets this fast would be very unusual
 
     # Classifier
+    classifier_keep_loaded: bool = True  # false on 512 MB hosts: load per prediction, then release
+    classifier_onnx_dir: str = "models/onnx"  # int8 ONNX export (production): scripts/export_onnx.py
     classifier_model_dir: str = "models/distilbert"  # from the Colab notebook; TF-IDF fallback
     mlflow_tracking_uri: str = "sqlite:///mlflow.db"  # artifacts go to ./mlartifacts
 
     # API / auth
+    environment: Literal["development", "production"] = "development"  # production refuses default secrets
     cors_origins: list[str] = ["http://localhost:3000"]
     jwt_secret: str = "change-me"
     jwt_expire_minutes: int = 480
     staff_username: str = "admin"
     staff_password: str = "admin"
+    # optional read-only account for the public demo (recruiters can explore the dashboard, not change it)
+    demo_username: str = "demo"
+    demo_password: str = ""
+    # public demo protection: per-IP limits and a daily cap on assistant turns (Groq free tier)
+    rate_limits: bool = True
+    daily_chat_limit: int = 300
     warmup_models: bool = True  # load DistilBERT + embeddings at API startup (first call otherwise ~30 s)
 
     # Observability
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
+
+
+def check_production(s: "Settings") -> list[str]:
+    """Problems that must be fixed before running with ENVIRONMENT=production."""
+    problems = []
+    if s.jwt_secret in ("change-me", "") or len(s.jwt_secret) < 32:
+        problems.append("JWT_SECRET must be a random string of at least 32 characters")
+    if s.staff_password in ("admin", "") or len(s.staff_password) < 12:
+        problems.append("STAFF_PASSWORD must be set (at least 12 characters, not 'admin')")
+    if not s.groq_api_key:
+        problems.append("GROQ_API_KEY is missing")
+    if s.database_url.startswith("sqlite"):
+        problems.append("DATABASE_URL should point to Postgres (the host's disk is wiped on restart)")
+    return problems
 
 
 @lru_cache

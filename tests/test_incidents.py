@@ -219,3 +219,12 @@ def test_known_issue_reaches_the_chat_as_its_own_event(monkeypatch):
     events = list(stream_events(graph, {**new_turn("Salesforce crawl failing with 401"), "customer": customer},
                                 {"configurable": {"thread_id": "s1"}}))
     assert {"type": "known_issue", **issue} in events
+
+
+def test_poisson_tail_matches_scipy():
+    from scipy.stats import poisson
+
+    from supportpilot.incidents.detector import poisson_tail
+
+    for k, rate in [(1, 0.05), (3, 0.05), (3, 1.4), (5, 2.0), (7, 0.3)]:
+        assert abs(poisson_tail(k, rate) - poisson.sf(k - 1, rate)) < 1e-12

@@ -7,6 +7,7 @@ from sqlalchemy.orm import object_session
 
 from supportpilot.api import deps
 from supportpilot.api.auth import require_staff
+from supportpilot.api.ratelimit import limit
 from supportpilot.api.routes.knowledge import draft_in_background
 from supportpilot.api.schemas import (
     ClassifyRequest,
@@ -101,7 +102,8 @@ def staff_reply(ticket_id: int, body: ReplyCreate, tickets: deps.Tickets, staff:
     return _detail(ticket)
 
 
-@router.post("/tickets/{ticket_id}/suggest-reply", response_model=SuggestedReply)
+@router.post("/tickets/{ticket_id}/suggest-reply", response_model=SuggestedReply,
+             dependencies=[Depends(limit("suggest", 20, 3600))])
 def suggested_reply(ticket_id: int, tickets: deps.Tickets):
     """RAG-drafted reply with citations. Staff review and send it themselves."""
     return suggest_reply(_get(tickets, ticket_id))

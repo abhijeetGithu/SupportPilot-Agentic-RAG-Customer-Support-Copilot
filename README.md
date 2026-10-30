@@ -510,7 +510,14 @@ uvicorn supportpilot.api.main:app --reload       # http://localhost:8000/docs
 cd frontend && npm install && npm run dev        # http://localhost:3000
 ```
 
-Run the tests with `pytest`. To run everything in containers, use `docker compose up --build`.
+Run the tests with `pip install -e ".[dev,test]"` then `pytest`. To run everything in containers, use
+`docker compose up --build`. Crawling the docs again needs `pip install -e ".[ingest]"`.
+
+### Deploy for free (Vercel + Render + Qdrant Cloud + Neon)
+The production backend fits Render's free 512 MB: the ticket classifiers run as **int8 ONNX** (268 → 67 MB
+each, no PyTorch), loaded per prediction; measured peak under a realistic workload is 381 MB.
+Public-demo safeguards: per-IP rate limits, a daily cap on assistant turns, a read-only demo login, and
+production mode refuses default secrets. Step-by-step guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ### Use the tools from Claude Desktop, Claude Code or Cursor (MCP)
 
@@ -543,8 +550,8 @@ Details: [docs/results/phase7_mcp_server.md](docs/results/phase7_mcp_server.md).
 - [x] **Phase 6:** Next.js chat widget, support pages, staff dashboard, Playwright end-to-end walk-through
 - [x] **Phase 7:** MCP server for Claude Desktop / Claude Code / Cursor (stdio + streamable HTTP)
 - [x] **Phase 7.5:** Self-improving copilot: screenshot and PDF understanding, knowledge loop and doc gaps, KB links in replies, incident detection
-- [ ] **Phase 8:** RAGAS and LLM-as-judge evals, agent scenario tests, guardrails
-- [ ] **Phase 9:** Langfuse observability, CI eval gate, cloud deployment and live demo
+- [x] **Phase 8:** Self-check (claims verified against the docs), input/output guardrails, answer-quality eval with a validated judge ([results](docs/results/phase8_trust.md)); red-team run pending
+- [ ] **Phase 9:** Free-tier deployment prepared: int8 ONNX classifiers, 381 MB peak, rate limits, demo login ([results](docs/results/phase9_deploy.md), [guide](docs/DEPLOYMENT.md)); live URL, Langfuse, CI eval gate next
 
 ---
 

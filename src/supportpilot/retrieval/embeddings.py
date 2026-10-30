@@ -9,12 +9,15 @@ from supportpilot.config import get_settings
 
 @lru_cache
 def dense_model() -> TextEmbedding:
-    return TextEmbedding(get_settings().embedding_model)
+    s = get_settings()
+    return TextEmbedding(s.embedding_model, cache_dir=s.embedding_cache_dir, threads=1,
+                         enable_cpu_mem_arena=False)  # memory over speed: 512 MB on the free tier
 
 
 @lru_cache
 def sparse_model() -> SparseTextEmbedding:
-    return SparseTextEmbedding(get_settings().sparse_model)
+    s = get_settings()
+    return SparseTextEmbedding(s.sparse_model, cache_dir=s.embedding_cache_dir)
 
 
 def dense_dim() -> int:

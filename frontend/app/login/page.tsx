@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, staffToken } from "@/lib/api";
 
+// public read-only account, e.g. NEXT_PUBLIC_DEMO_LOGIN="demo:look-around-only" (never the admin login)
+const [demoUser, demoPassword] = (process.env.NEXT_PUBLIC_DEMO_LOGIN ?? "").split(":");
+const DEMO = demoUser && demoPassword ? { user: demoUser, password: demoPassword } : null;
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -25,8 +29,8 @@ export default function LoginPage() {
           e.preventDefault();
           setPending(true);
           try {
-            const { access_token } = await api.login(username, password);
-            staffToken.set(access_token);
+            const { access_token, role } = await api.login(username, password);
+            staffToken.set(access_token, role);
             router.push("/dashboard");
           } catch {
             toast.error("Wrong username or password");
@@ -62,10 +66,23 @@ export default function LoginPage() {
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? "Signing in…" : "Sign in"}
         </Button>
+        {DEMO ? (
+          <div className="space-y-2 rounded-lg bg-muted/60 p-3 text-xs">
+            <p>
+              <span className="font-medium">Exploring the project?</span> Use the read-only demo login:{" "}
+              <span className="font-mono">{DEMO.user} / {DEMO.password}</span>
+            </p>
+            <Button type="button" size="sm" variant="outline" className="w-full"
+                    onClick={() => { setUsername(DEMO.user); setPassword(DEMO.password); }}>
+              Fill in the demo login
+            </Button>
+          </div>
+        ) : (
+          <p className="text-center text-xs text-muted-foreground">Local development: admin / admin</p>
+        )}
         <p className="text-center text-xs text-muted-foreground">
-          Demo account: admin / admin ·{" "}
           <Link href="/" className="underline">
-            back to the site
+            Back to the site
           </Link>
         </p>
       </form>

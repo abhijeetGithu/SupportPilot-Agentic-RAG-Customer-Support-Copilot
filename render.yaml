@@ -1,0 +1,34 @@
+# Render Blueprint: New > Blueprint > pick this repo. Secrets marked sync:false are asked for at creation.
+services:
+  - type: web
+    name: supportpilot-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL          # Neon: postgresql+psycopg://USER:PASSWORD@HOST/DB?sslmode=require
+        sync: false
+      - key: QDRANT_URL            # Qdrant Cloud cluster URL (https://...:6333)
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: STAFF_PASSWORD        # your admin login (12+ characters)
+        sync: false
+      - key: DEMO_PASSWORD         # the read-only login you share with recruiters
+        sync: false
+      - key: CORS_ORIGINS          # JSON list with your Vercel URL, e.g. ["https://supportpilot.vercel.app"]
+        sync: false
+      - key: PUBLIC_APP_URL        # your Vercel URL (KB article links)
+        sync: false
+      - key: DAILY_CHAT_LIMIT
+        value: "300"
+      - key: CLASSIFIER_KEEP_LOADED   # load one classifier per prediction: the measured 401 MB peak
+        value: "false"

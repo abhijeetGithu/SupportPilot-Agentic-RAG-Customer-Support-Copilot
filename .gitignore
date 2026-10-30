@@ -17,3 +17,5 @@ evals/reports/*
 evals/cache/
 mlflow.db
 mlartifacts/
+dist/
+build/

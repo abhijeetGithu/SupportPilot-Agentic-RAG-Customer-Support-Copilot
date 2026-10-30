@@ -3,7 +3,6 @@ vectors as the docs, so hybrid search ranks them alongside the documentation wit
 
 from datetime import UTC, datetime
 
-from llama_index.core import Document
 from qdrant_client import models
 
 from supportpilot.config import get_settings
@@ -30,6 +29,8 @@ def article_text(article: KbArticle) -> str:
 
 def index_article(article: KbArticle, client=None, collection: str | None = None) -> int:
     """Chunk, embed and upsert; returns the number of chunks. Replaces any earlier version."""
+    from llama_index.core import Document
+
     from supportpilot.ingestion.chunking import chunk_documents
     from supportpilot.retrieval.vector_store import get_client, upsert_chunks
 

@@ -122,6 +122,7 @@ class LoginRequest(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    role: str = "admin"  # admin | viewer (read-only demo account)
 
 
 class SuggestedReply(BaseModel):

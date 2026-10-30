@@ -61,3 +61,16 @@ def no_prompt_guard_calls(monkeypatch):
     from supportpilot.guardrails import input_guard
 
     monkeypatch.setattr(input_guard, "injection_score", lambda text: 0.0)
+
+
+@pytest.fixture(autouse=True)
+def no_rate_limits(monkeypatch):
+    """Tests make many requests from one client; rate limits get their own test (tests/test_deploy.py)."""
+    from supportpilot.api import ratelimit
+    from supportpilot.config import get_settings
+
+    monkeypatch.setenv("RATE_LIMITS", "false")  # survives fixtures that rebuild the settings
+    get_settings.cache_clear()
+    ratelimit.reset()
+    yield
+    get_settings.cache_clear()

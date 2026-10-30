@@ -11,6 +11,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from supportpilot.agent.graph import display_text, new_turn
 from supportpilot.api import deps
+from supportpilot.api.ratelimit import limit
 from supportpilot.api.schemas import (
     ChatHistory,
     ChatMessage,
@@ -46,13 +47,14 @@ def _sse(events) -> EventSourceResponse:
     return EventSourceResponse(iterate_in_threadpool(to_sse(events)), ping=15)
 
 
-@router.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
+@router.post("/sessions", response_model=SessionOut, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(limit("session", 10, 3600))])
 def create_session(body: SessionCreate, db: deps.DB):
     session = create_chat_session(db, body.name, body.email)
     return SessionOut(session_id=session.id, mode=session.mode)
 
 
-@router.post("/chat/{session_id}/stream")
+@router.post("/chat/{session_id}/stream", dependencies=[Depends(limit("chat", 15, 600, daily_cap=True))])
 def stream_chat(body: ChatRequest, session: Session, graph: Graph, tickets: deps.Tickets):
     """AI mode: run the agent and stream events. Human mode: store the message for the support team.
 
@@ -103,7 +105,7 @@ def track_question(events, session_id: str, question: str):
             log.warning("question logging failed", exc_info=True)
 
 
-@router.post("/chat/{session_id}/resume")
+@router.post("/chat/{session_id}/resume", dependencies=[Depends(limit("chat", 15, 600, daily_cap=True))])
 def resume_chat(body: ResumeRequest, session: Session, graph: Graph):
     """Answer the pending ticket draft (approve / edit / cancel) and stream the rest of the turn."""
     if not graph.get_state(_cfg(session.id)).interrupts:

@@ -22,6 +22,12 @@ import type {
 } from "@/lib/types";
 
 const TOKEN_KEY = "supportpilot.staffToken";
+const ROLE_KEY = "supportpilot.staffRole";
+
+/** Where the FastAPI backend is. Locally "/api" (proxied by next.config.ts); in production the browser calls
+ *  the backend directly (NEXT_PUBLIC_API_BASE=https://<service>.onrender.com/api), because a proxy can buffer
+ *  the token stream and adds a timeout. */
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -31,8 +37,15 @@ export class ApiError extends Error {
 
 export const staffToken = {
   get: () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY)),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  set: (t: string, role = "admin") => {
+    localStorage.setItem(TOKEN_KEY, t);
+    localStorage.setItem(ROLE_KEY, role);
+  },
+  role: () => (typeof window === "undefined" ? null : localStorage.getItem(ROLE_KEY)),
+  clear: () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ROLE_KEY);
+  },
 };
 
 async function request<T>(path: string, init: RequestInit & { staff?: boolean } = {}): Promise<T> {
@@ -43,7 +56,7 @@ async function request<T>(path: string, init: RequestInit & { staff?: boolean } 
     const token = staffToken.get();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  const res = await fetch(`/api${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -62,7 +75,7 @@ const json = (body: unknown) => JSON.stringify(body);
 
 /** POSTs to an SSE endpoint and yields parsed ChatEvents as they arrive. */
 export async function* streamEvents(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: json(body),
@@ -133,9 +146,11 @@ export const api = {
       body: json({ email, body }),
     }),
 
+  health: () => request<{ status: string }>("/health"),
+
   // ---------- staff ----------
   login: (username: string, password: string) =>
-    request<{ access_token: string }>("/auth/login", { method: "POST", body: json({ username, password }) }),
+    request<{ access_token: string; role: "admin" | "viewer" }>("/auth/login", { method: "POST", body: json({ username, password }) }),
   tickets: (params: Record<string, string | number | boolean | undefined>) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") qs.set(k, String(v));
@@ -193,7 +208,7 @@ export const api = {
   metrics: () => request<Metrics>("/admin/metrics", { staff: true }),
   /** Staff-only download (needs the bearer token, so fetched as a blob rather than a plain link). */
   attachmentBlob: async (id: string) => {
-    const res = await fetch(`/api/admin/attachments/${id}`, {
+    const res = await fetch(`${API_BASE}/admin/attachments/${id}`, {
       headers: { Authorization: `Bearer ${staffToken.get() ?? ""}` },
     });
     if (!res.ok) throw new ApiError(res.status, res.statusText);

@@ -1,8 +1,9 @@
 """Customer ticket endpoints: contact form, ticket lookup, customer replies."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from supportpilot.api import deps
+from supportpilot.api.ratelimit import limit
 from supportpilot.api.schemas import CustomerReply, CustomerTicketView, TicketLookup
 from supportpilot.attachments import UploadRejected, get_customer_attachments
 from supportpilot.db.models import AuthorType, Ticket, TicketSource, TicketStatus
@@ -37,7 +38,8 @@ def _owned(tickets: TicketService, number: str, email: str) -> Ticket:
     return ticket
 
 
-@router.post("", response_model=CreateResult, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CreateResult, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(limit("ticket", 5, 3600))])
 def create_ticket(body: TicketCreate, tickets: deps.Tickets):
     """Contact form -> TicketService.create(source=form). Attachments were uploaded without a session."""
     try:
@@ -47,12 +49,12 @@ def create_ticket(body: TicketCreate, tickets: deps.Tickets):
     return tickets.create(body, TicketSource.FORM, attachments=files)
 
 
-@router.post("/lookup", response_model=CustomerTicketView)
+@router.post("/lookup", response_model=CustomerTicketView, dependencies=[Depends(limit("lookup", 30, 600))])
 def lookup_ticket(body: TicketLookup, tickets: deps.Tickets):
     return _customer_view(_owned(tickets, body.number, body.email))
 
 
-@router.post("/{number}/replies", response_model=CustomerTicketView)
+@router.post("/{number}/replies", response_model=CustomerTicketView, dependencies=[Depends(limit("reply", 20, 3600))])
 def customer_reply(number: str, body: CustomerReply, tickets: deps.Tickets):
     ticket = _owned(tickets, number, body.email)
     if ticket.status == TicketStatus.CLOSED.value:

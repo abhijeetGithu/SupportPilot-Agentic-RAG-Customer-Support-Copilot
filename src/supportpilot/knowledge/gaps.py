@@ -69,13 +69,40 @@ def cluster(texts: list[str], distance: float = CLUSTER_DISTANCE, embed=None) ->
     """Cluster label per text (singletons get their own label)."""
     if len(texts) < 2:
         return [0] * len(texts)
-    from sklearn.cluster import AgglomerativeClustering
-
     if embed is None:
         from supportpilot.retrieval.embeddings import embed_passages as embed
-    vectors = np.asarray(embed(texts), dtype=float)
-    return AgglomerativeClustering(n_clusters=None, metric="cosine", linkage="average",
-                                   distance_threshold=distance).fit_predict(vectors).tolist()
+    return average_linkage(np.asarray(embed(texts), dtype=float), distance)
+
+
+def average_linkage(vectors: np.ndarray, threshold: float) -> list[int]:
+    """Agglomerative clustering, cosine distance, average linkage: merge the closest pair of clusters
+    while their distance is below the threshold. Same result as scikit-learn's AgglomerativeClustering
+    (tested), without the dependency in the slim runtime image. O(n^3): fine for the few hundred
+    gap questions a report covers."""
+    v = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    d = 1.0 - v @ v.T
+    n = len(v)
+    np.fill_diagonal(d, np.inf)
+    size = np.ones(n)
+    members = {i: [i] for i in range(n)}
+    alive = np.ones(n, dtype=bool)
+    while alive.sum() > 1:
+        masked = np.where(np.outer(alive, alive), d, np.inf)
+        a, b = divmod(int(np.argmin(masked)), n)
+        if masked[a, b] >= threshold:
+            break
+        # Lance-Williams update for average linkage, then fold b into a
+        d[a, :] = d[:, a] = (size[a] * d[a, :] + size[b] * d[b, :]) / (size[a] + size[b])
+        d[a, a] = np.inf
+        size[a] += size[b]
+        members[a] += members.pop(b)
+        alive[b] = False
+        d[b, :] = d[:, b] = np.inf
+    labels = [0] * n
+    for label, idx in enumerate(members.values()):
+        for i in idx:
+            labels[i] = label
+    return labels
 
 
 def gap_report(db, days: int = 30, embed=None) -> dict:

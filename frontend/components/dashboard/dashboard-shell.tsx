@@ -6,6 +6,7 @@ import { Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, BarChart3, BookOpenCheck, Inbox, LogOut, SearchX, Siren, Sparkles } from "lucide-react";
 
+import { BackendStatus } from "@/components/backend-status";
 import { Button } from "@/components/ui/button";
 import { api, staffToken } from "@/lib/api";
 import { useStaffToken } from "@/lib/use-staff-token";
@@ -23,7 +24,7 @@ const NAV = [
 /** Client-side auth guard + sidebar. The API enforces auth; this only redirects to /login. */
 export function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { mounted, token } = useStaffToken();
+  const { mounted, token, role } = useStaffToken();
   const ready = mounted && !!token;
 
   useEffect(() => {
@@ -67,10 +68,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <Suspense fallback={<SidebarNav pathname={null} counts={counts} />}>
           <ActiveSidebarNav counts={counts} />
         </Suspense>
+        {role === "viewer" && (
+          <p className="mt-auto mb-2 rounded-md bg-amber-100 px-2.5 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            Read-only demo account: you can explore everything, but changes are disabled.
+          </p>
+        )}
         <Button
           variant="ghost"
           size="sm"
-          className="mt-auto justify-start gap-2 text-muted-foreground"
+          className={cn("justify-start gap-2 text-muted-foreground", role !== "viewer" && "mt-auto")}
           onClick={() => {
             staffToken.clear();
             router.push("/login");
@@ -79,7 +85,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <LogOut className="size-4" /> Sign out
         </Button>
       </aside>
-      <main className="min-w-0 flex-1 p-6 lg:p-8">{children}</main>
+      <main className="min-w-0 flex-1">
+        <BackendStatus />
+        <div className="p-6 lg:p-8">{children}</div>
+      </main>
     </div>
   );
 }

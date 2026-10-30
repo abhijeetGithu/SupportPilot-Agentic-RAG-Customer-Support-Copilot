@@ -4,24 +4,22 @@ version = "0.1.0"
 description = "Agentic RAG customer-support copilot"
 requires-python = ">=3.10"
 dependencies = [
+    # Runtime only: this list is what the slim production image installs (no PyTorch, no scikit-learn).
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "python-dotenv>=1.0",
+    "numpy>=1.26",
     # RAG
-    "llama-index-core>=0.11",
-    "qdrant-client[fastembed]>=1.11",
-    "beautifulsoup4>=4.12",
-    "lxml>=5.2",
-    "markdownify>=0.13",
-    "tenacity>=8.5",
-    # Agent + LLM providers
+    "llama-index-core>=0.11",  # chunking (ingestion and KB publishing)
+    "qdrant-client[fastembed]>=1.11",  # fastembed brings onnxruntime + tokenizers
+    "onnxruntime>=1.18",  # also runs the int8 ticket classifiers
+    "tokenizers>=0.19",
+    # Agent + LLM
     "langgraph>=0.2",
     "langgraph-checkpoint-sqlite>=2.0",
     "langgraph-checkpoint-postgres>=2.0",
     "langchain-core>=0.3",
     "langchain-groq>=0.2",
-    "langchain-google-genai>=2.0",
-    "langchain-ollama>=0.2",
     # Database
     "sqlalchemy>=2.0",
     "psycopg[binary,pool]>=3.2",
@@ -30,16 +28,15 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "sse-starlette>=2.1",
     "python-multipart>=0.0.9",
+    "pyjwt>=2.9",
+    "email-validator>=2.2",
+    "httpx>=0.27",
     # Attachment understanding (PDF text layer; scanned pages rendered for the vision model)
     "pypdf>=5",
     "pypdfium2>=4.30",
     "pillow>=10",
-    "pyjwt>=2.9",
-    "email-validator>=2.2",
-    "httpx>=0.27",
-    # MCP + observability
+    # MCP
     "mcp>=2.3,<3",
-    "langfuse>=2.50",
 ]
 
 [project.optional-dependencies]
@@ -56,8 +53,16 @@ ml = [
     "matplotlib>=3.8",
     "joblib>=1.4",
 ]
-eval = ["ragas>=0.2", "pandas>=2.2"]
+eval = ["pandas>=2.2"]
 dev = ["pytest>=8.3", "ruff>=0.6"]
+# tests that check our NumPy/stdlib code against the reference libraries and the classifier data split
+test = ["pandas>=2.2", "scikit-learn>=1.5", "scipy>=1.11", "onnx>=1.16"]
+# optional LLM providers (LLM_PROVIDER=gemini | ollama), ingestion crawler deps, tracing
+providers = ["langchain-google-genai>=2.0", "langchain-ollama>=0.2"]
+ingest = ["beautifulsoup4>=4.12", "lxml>=5.2", "markdownify>=0.13", "tenacity>=8.5"]
+observability = ["langfuse>=2.50"]
+# converting the fine-tuned DistilBERT checkpoints to ONNX (scripts/export_onnx.py)
+export = ["torch>=2.3", "transformers>=5,<6", "onnx>=1.16"]
 
 [build-system]
 requires = ["setuptools>=68"]

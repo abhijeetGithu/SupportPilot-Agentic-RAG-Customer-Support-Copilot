@@ -1,20 +1,26 @@
 """Qdrant collection with a dense (bge-small) and a sparse (BM25) vector per chunk."""
 
-import uuid
+from __future__ import annotations
 
-from llama_index.core.schema import TextNode
+import uuid
+from typing import TYPE_CHECKING
+
 from qdrant_client import QdrantClient, models
 
 from supportpilot.config import get_settings
-from supportpilot.ingestion.chunking import embedding_text
 from supportpilot.retrieval import embeddings
+from supportpilot.retrieval.text import embedding_text
+
+if TYPE_CHECKING:  # llama-index is only imported when chunks are written (ingestion, KB publishing)
+    from llama_index.core.schema import TextNode
 
 DENSE = "dense"
 SPARSE = "bm25"
 
 
 def get_client() -> QdrantClient:
-    return QdrantClient(url=get_settings().qdrant_url, timeout=60)
+    s = get_settings()
+    return QdrantClient(url=s.qdrant_url, api_key=s.qdrant_api_key, timeout=60)
 
 
 def ensure_collection(client: QdrantClient, name: str, recreate: bool = False) -> None:

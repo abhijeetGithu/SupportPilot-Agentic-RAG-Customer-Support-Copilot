@@ -15,11 +15,11 @@ at higher volume.
 """
 
 import logging
+import math
 import re
 from datetime import timedelta
 
 import numpy as np
-from scipy.stats import poisson
 from sqlalchemy import select
 
 from supportpilot.config import get_settings
@@ -43,6 +43,15 @@ PROBLEM = re.compile(
 def looks_like_problem(text: str) -> bool:
     """True for reports of something broken (error, failure, slowness, missing data)."""
     return bool(PROBLEM.search(text))
+
+
+def poisson_tail(k: int, rate: float) -> float:
+    """P(X >= k) for X ~ Poisson(rate). Exact for the small k used here (no scipy at runtime)."""
+    term, below = math.exp(-rate), 0.0
+    for i in range(k):
+        below += term
+        term *= rate / (i + 1)
+    return max(0.0, 1.0 - below)
 
 
 def embed(texts: list[str]) -> np.ndarray:
@@ -107,7 +116,7 @@ def on_ticket_created(db, ticket: Ticket, now=None) -> Incident | None:
     baseline = int(np.sum(_vectors(older) @ v >= s.incident_similarity)) if older else 0
     windows = s.incident_baseline_days * 24 * 60 / s.incident_window_minutes
     rate = max(baseline / windows, MIN_BASELINE_RATE)
-    p_value = float(poisson.sf(k - 1, rate))  # P(X >= k)
+    p_value = poisson_tail(k, rate)
     if p_value > s.incident_max_p_value:
         return None
 

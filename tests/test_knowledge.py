@@ -242,3 +242,20 @@ def test_agents_find_and_link_published_articles(kb, monkeypatch):
         k: v for e in detail["events"] if e["type"] == "kb_linked" for k, v in e.items()}.items()
     [listed] = c.get("/api/admin/kb?status=published", headers=h).json()
     assert listed["linked_in_replies"] == 1
+
+
+def test_average_linkage_matches_scikit_learn():
+    import numpy as np
+    from sklearn.cluster import AgglomerativeClustering
+    from sklearn.metrics import adjusted_rand_score
+
+    from supportpilot.knowledge.gaps import average_linkage
+
+    rng = np.random.default_rng(0)
+    for trial in range(5):
+        centers = rng.normal(size=(4, 16))
+        x = np.vstack([c + rng.normal(scale=0.35, size=(10, 16)) for c in centers])
+        ours = average_linkage(x, 0.35)
+        ref = AgglomerativeClustering(n_clusters=None, metric="cosine", linkage="average",
+                                      distance_threshold=0.35).fit_predict(x)
+        assert adjusted_rand_score(ref, ours) == 1.0, trial

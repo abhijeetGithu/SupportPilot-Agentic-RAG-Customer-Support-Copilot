@@ -24,7 +24,7 @@ _sessionmaker: sessionmaker | None = None
 def configure(url: str | None = None) -> Engine:
     """(Re)create the engine. url defaults to DATABASE_URL; 'sqlite://' gives a shared in-memory DB."""
     global _engine, _sessionmaker
-    url = url or get_settings().database_url
+    url = normalize_db_url(url or get_settings().database_url)
     kwargs: dict = {"pool_pre_ping": True}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
@@ -33,6 +33,14 @@ def configure(url: str | None = None) -> Engine:
     _engine = create_engine(url, **kwargs)
     _sessionmaker = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
+
+
+def normalize_db_url(url: str) -> str:
+    """Hosts like Neon hand out postgresql:// (or postgres://) URLs; SQLAlchemy needs the psycopg 3 driver name."""
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
 
 
 def get_engine() -> Engine:
