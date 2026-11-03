@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
+from supportpilot.config import get_settings
+
 
 class OnnxClassifier:
     def __init__(self, folder: Path, model_file: str = "model.int8.onnx"):
@@ -26,6 +28,8 @@ class OnnxClassifier:
         opts.inter_op_num_threads = 1
         opts.enable_cpu_mem_arena = False  # one request at a time: the arena only costs memory (~26 MB/model)
         opts.enable_mem_pattern = False
+        if get_settings().onnx_low_memory:
+            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
         self.session = ort.InferenceSession(str(folder / model_file), opts, providers=["CPUExecutionProvider"])
 
     def logits(self, text: str) -> np.ndarray:

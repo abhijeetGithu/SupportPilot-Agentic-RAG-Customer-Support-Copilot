@@ -19,6 +19,31 @@ upload, and the staff pages (doc gaps, KB search, metrics).
 Breakdown before the changes (MB): Python + FastAPI + LangChain/LangGraph + app ~235 (qdrant-client 70,
 llama-index 34), bge-small embeddings 125, each classifier ~75–99.
 
+### Linux re-measurement after the first deploy ran out of memory
+The numbers above were measured on Windows. On Render the instance was killed ("Ran out of memory (used
+over 512MB)") during the second chat message of a session. Re-measured in the production image on Linux,
+`docker run --memory=512m --cpus=0.5`, reading the container's own counter (`memory.peak`, what Render
+enforces). Workload: one two-message chat ending in a ticket, then three more ticket chats from other
+customers (which also triggers incident detection).
+
+| Configuration | Peak | Resting after 4 tickets |
+|---|---|---|
+| As first deployed (process RSS of the model steps alone) | 536 MB | — |
+| Reranker import fixed + `ONNX_LOW_MEMORY=true` | 480 MB | 457 MB, still creeping |
+| Reranker import fixed + malloc thresholds | 384 MB | 294 MB, flat |
+| Reranker import fixed + malloc thresholds + `ONNX_LOW_MEMORY=true` (deployed) | **340 MB** | **251 MB**, flat |
+
+- Reranker import: `retrieval/reranker.py` imported `embedding_text` via the ingestion module, pulling in
+  llama-index at startup (−64 MB). It now imports it from `retrieval/text.py`.
+- Malloc thresholds: `MALLOC_MMAP_THRESHOLD_` / `MALLOC_TRIM_THRESHOLD_` = 128 KB make glibc return freed
+  buffers to the OS.
+- `ONNX_LOW_MEMORY=true`: basic ONNX graph optimization, no memory patterns.
+
+The creep was glibc keeping freed model-load and tensor buffers. Basic graph optimization saves less than a
+quick look suggests: right after loading, bge-small needs 75 MB instead of 179, but the first inference
+allocates the difference again (high-water mark 158 vs 180 MB). Cost: ~0.2 s more per 128-token input on
+0.5 CPU, small next to the LLM calls.
+
 ## Classifiers: PyTorch → ONNX int8 (`scripts/export_onnx.py`, test split of 2,366 tickets)
 | Task | PyTorch macro-F1 | ONNX fp32 | **ONNX int8 (QUInt8)** | Agreement with PyTorch | Size | CPU / ticket |
 |---|---|---|---|---|---|---|

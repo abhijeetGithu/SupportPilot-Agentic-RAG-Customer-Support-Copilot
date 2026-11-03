@@ -90,6 +90,9 @@ class Settings(BaseSettings):
 
     # Classifier
     classifier_keep_loaded: bool = True  # false on 512 MB hosts: load per prediction, then release
+    # true on 512 MB hosts: ONNX "basic" graph optimization, no memory patterns. Container peak over a
+    # 4-ticket chat run: 384 -> 340 MB; bge-small takes ~0.2 s more per 128-token input on 0.5 CPU
+    onnx_low_memory: bool = False
     classifier_onnx_dir: str = "models/onnx"  # int8 ONNX export (production): scripts/export_onnx.py
     classifier_model_dir: str = "models/distilbert"  # from the Colab notebook; TF-IDF fallback
     mlflow_tracking_uri: str = "sqlite:///mlflow.db"  # artifacts go to ./mlartifacts

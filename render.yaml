@@ -30,5 +30,7 @@ services:
         sync: false
       - key: DAILY_CHAT_LIMIT
         value: "300"
+      - key: ONNX_LOW_MEMORY          # lower ONNX graph optimization: ~40 MB less peak memory
+        value: "true"
       - key: CLASSIFIER_KEEP_LOADED   # load one classifier per prediction: the measured 401 MB peak
         value: "false"

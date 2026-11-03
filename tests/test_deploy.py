@@ -74,3 +74,15 @@ def test_forged_forwarded_for_cannot_dodge_limits(client, monkeypatch):  # noqa:
     codes = [client.post("/api/sessions", json=body,
                          headers={"X-Forwarded-For": f"10.0.0.{i}, 198.51.100.7"}).status_code for i in range(11)]
     assert codes[-1] == 429
+
+
+def test_app_startup_does_not_import_ingestion_libraries():
+    # llama-index costs ~64 MB on a 512 MB host; only ingestion and KB publishing may import it
+    import os
+    import subprocess
+    import sys
+
+    code = "import sys, supportpilot.api.main; print('llama_index' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={**os.environ, "GROQ_API_KEY": "gsk_test_dummy_never_used"})
+    assert out.stdout.strip() == "False"

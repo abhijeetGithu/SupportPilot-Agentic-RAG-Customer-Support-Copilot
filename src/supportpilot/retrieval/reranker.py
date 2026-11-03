@@ -10,8 +10,8 @@ from functools import lru_cache
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 from supportpilot.config import get_settings
-from supportpilot.ingestion.chunking import embedding_text
 from supportpilot.retrieval.schemas import RetrievedChunk
+from supportpilot.retrieval.text import embedding_text
 
 
 @lru_cache

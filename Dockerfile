@@ -3,7 +3,11 @@
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    EMBEDDING_CACHE_DIR=/app/.cache/fastembed MALLOC_ARENA_MAX=2
+    EMBEDDING_CACHE_DIR=/app/.cache/fastembed MALLOC_ARENA_MAX=2 ONNX_LOW_MEMORY=true \
+    MALLOC_MMAP_THRESHOLD_=131072 MALLOC_TRIM_THRESHOLD_=131072
+# The two MALLOC_*_THRESHOLD_ lines hand freed buffers (model loads, tensors) back to the OS. Without them
+# glibc keeps them and memory crept to 480 MB after 4 ticket chats in a 512 MB container (OOM on Render);
+# with them it levels off at ~250 MB, peak 340 MB (docs/results/phase9_deploy.md)
 WORKDIR /app
 
 COPY pyproject.toml ./
