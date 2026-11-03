@@ -94,3 +94,11 @@ def _add_missing_columns(engine: Engine) -> None:
                 if col.name not in existing and col.nullable:
                     col_type = col.type.compile(dialect=engine.dialect)
                     conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {col_type}'))
+            if engine.dialect.name != "postgresql":
+                continue  # SQLite doesn't enforce VARCHAR lengths
+            for c in db_inspector.get_columns(table.name):
+                model_col = table.columns.get(c["name"])
+                old_len = getattr(c["type"], "length", None)
+                new_len = getattr(getattr(model_col, "type", None), "length", None)
+                if old_len and new_len and new_len > old_len:  # widen, never shrink
+                    conn.execute(text(f'ALTER TABLE {table.name} ALTER COLUMN "{c["name"]}" TYPE VARCHAR({new_len})'))

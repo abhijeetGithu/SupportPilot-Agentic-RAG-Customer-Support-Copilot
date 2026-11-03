@@ -116,7 +116,7 @@ class TicketEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), index=True)
     type: Mapped[str] = mapped_column(String(20))
-    actor: Mapped[str] = mapped_column(String(10))
+    actor: Mapped[str] = mapped_column(String(80))  # "staff:<username>", "system", "ai", "customer"
     payload: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
