@@ -50,7 +50,7 @@ Before these changes the same workload peaked at 529 MB.
 ## 3. Publish the classifier models (GitHub release)
 The int8 models are too big for git, so the Docker build downloads them from a release.
 1. Create the zip (once): `.venv\Scripts\python scripts\package_models.py` → `dist/classifiers-onnx-int8.zip`.
-2. On GitHub: your repo → **Releases** → **Draft a new release** → tag **`models-v1`** → title
+2. On GitHub: your repo → **Releases** → **Draft a new release** → tag **`Model-V1`** → title
    "Classifier models" → attach `dist/classifiers-onnx-int8.zip` → **Publish**.
 
 ## 4. Render (backend)

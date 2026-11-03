@@ -15,7 +15,7 @@ RUN pip install . && pip cache purge || true
 RUN python -c "from supportpilot.retrieval import embeddings as e; e.embed_query('x'); e.sparse_query('x')"
 
 # Ticket classifiers: int8 ONNX export (scripts/export_onnx.py), published as a GitHub release asset.
-ARG CLASSIFIER_URL=https://github.com/abhijeetGithu/SupportPilot-Agentic-RAG-Customer-Support-Copilot/releases/download/models-v1/classifiers-onnx-int8.zip
+ARG CLASSIFIER_URL=https://github.com/abhijeetGithu/SupportPilot-Agentic-RAG-Customer-Support-Copilot/releases/download/Model-V1/classifiers-onnx-int8.zip
 COPY scripts ./scripts
 RUN python scripts/fetch_classifiers.py "$CLASSIFIER_URL"
 
